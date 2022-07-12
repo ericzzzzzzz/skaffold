@@ -17,6 +17,7 @@ limitations under the License.
 package integration
 
 import (
+	"context"
 	"fmt"
 	"testing"
 
@@ -74,6 +75,26 @@ func TestRenderApplyHelmDeployment(t *testing.T) {
 
 		depApp := client.GetDeployment("skaffold-helm")
 		t.CheckNotNil(depApp)
+	})
+}
+
+func TestApplyCloudRunDeployment(t *testing.T) {
+	MarkIntegrationTest(t, CanRunWithoutGcp)
+
+	testutil.Run(t, "RenderApplyCloudRunDeployment", func(t *testutil.T) {
+
+		skaffold.Apply("service.yaml").WithRepo("").InDir("testdata/deploy-cloudrun").RunOrFail(t.T)
+
+		ctx := context.Background()
+		svc, err := getRunService(ctx, "k8s-skaffold", "us-central1", "skaffold-test")
+
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = checkReady(svc); err != nil {
+			t.Fatal(err)
+		}
+
 	})
 }
 
