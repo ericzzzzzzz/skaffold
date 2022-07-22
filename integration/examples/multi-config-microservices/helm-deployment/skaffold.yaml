@@ -1,0 +1,13 @@
+apiVersion: skaffold/v3alpha1
+kind: Config
+build:
+  artifacts:
+  - image: skaffold-helm
+  - image: skaffold-example
+manifests:
+#  helm:
+#    releases:
+#    - name: skaffold-helm
+#      chartPath: charts
+  rawYaml:
+    - k8s-pod.yaml
