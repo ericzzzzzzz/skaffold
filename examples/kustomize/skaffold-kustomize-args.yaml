@@ -1,6 +1,8 @@
-apiVersion: skaffold/v2beta29
+apiVersion: skaffold/v3alpha1
 kind: Config
-deploy:
+manifests:
   kustomize:
+    paths:
+      - .
     buildArgs:
-      - "--load-restrictor LoadRestrictionsNone"
+      - "-o abc.yaml"
