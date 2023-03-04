@@ -19,8 +19,8 @@ package transform
 import (
 	"testing"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest"
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/latest"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 func TestNewTransformer(t *testing.T) {
@@ -37,6 +37,12 @@ func TestNewTransformer(t *testing.T) {
 			config: []latest.Transformer{
 				{Name: "set-annotations", ConfigMap: []string{"owner:skaffold-test"}},
 				{Name: "set-labels", ConfigMap: []string{"owner:skaffold-test"}},
+			},
+		},
+		{
+			description: "values containing ':'",
+			config: []latest.Transformer{
+				{Name: "apply-setters", ConfigMap: []string{"owner:skaffold:test"}},
 			},
 		},
 	}

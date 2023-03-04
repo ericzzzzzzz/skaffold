@@ -29,24 +29,24 @@ import (
 	"github.com/pkg/errors"
 	"k8s.io/client-go/tools/clientcmd/api"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/deploy/kubectl"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/deploy/label"
-	deployutil "github.com/GoogleContainerTools/skaffold/pkg/skaffold/deploy/util"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/graph"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/helm"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/hooks"
-	ctl "github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubectl"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubernetes/client"
-	kubectx "github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubernetes/context"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubernetes/logger"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubernetes/manifest"
-	rhelm "github.com/GoogleContainerTools/skaffold/pkg/skaffold/render/renderer/helm"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/runner/runcontext"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest"
-	schemautil "github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/util"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/util"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/warnings"
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/deploy/kubectl"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/deploy/label"
+	deployutil "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/deploy/util"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/graph"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/helm"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/hooks"
+	ctl "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubectl"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/client"
+	kubectx "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/context"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/logger"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/manifest"
+	rhelm "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/render/renderer/helm"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/runner/runcontext"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/latest"
+	schemautil "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/util"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/util"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/warnings"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 var testBuilds = []graph.Artifact{{
@@ -1148,77 +1148,6 @@ func TestHelmDependencies(t *testing.T) {
 	}
 }
 
-func TestImageSetFromConfig(t *testing.T) {
-	tests := []struct {
-		description string
-		valueName   string
-		tag         string
-		expected    string
-		strategy    *latest.HelmConventionConfig
-		shouldErr   bool
-	}{
-		{
-			description: "Helm set values with no convention config",
-			valueName:   "image",
-			tag:         "skaffold-helm:1.0.0",
-			expected:    "image=skaffold-helm:1.0.0",
-			strategy:    nil,
-			shouldErr:   false,
-		},
-		{
-			description: "Helm set values with helm conventions",
-			valueName:   "image",
-			tag:         "skaffold-helm:1.0.0",
-			expected:    "image.repository=skaffold-helm,image.tag=1.0.0",
-			strategy:    &latest.HelmConventionConfig{},
-			shouldErr:   false,
-		},
-		{
-			description: "Helm set values with helm conventions and explicit registry value",
-			valueName:   "image",
-			tag:         "docker.io/skaffold-helm:1.0.0",
-			expected:    "image.registry=docker.io,image.repository=skaffold-helm,image.tag=1.0.0",
-			strategy: &latest.HelmConventionConfig{
-				ExplicitRegistry: true,
-			},
-			shouldErr: false,
-		},
-		{
-			description: "Invalid tag with helm conventions",
-			valueName:   "image",
-			tag:         "skaffold-helm:1.0.0,0",
-			expected:    "",
-			strategy:    &latest.HelmConventionConfig{},
-			shouldErr:   true,
-		},
-		{
-			description: "Helm set values with helm conventions and explicit registry value, but missing in tag",
-			valueName:   "image",
-			tag:         "skaffold-helm:1.0.0",
-			expected:    "",
-			strategy: &latest.HelmConventionConfig{
-				ExplicitRegistry: true,
-			},
-			shouldErr: true,
-		},
-		{
-			description: "Helm set values using digest",
-			valueName:   "image",
-			tag:         "skaffold-helm:stable@sha256:45b23dee08af5e43a7fea6c4cf9c25ccf269ee113168c19722f87876677c5cb2",
-			expected:    "image.repository=skaffold-helm,image.tag=stable@sha256:45b23dee08af5e43a7fea6c4cf9c25ccf269ee113168c19722f87876677c5cb2",
-			strategy:    &latest.HelmConventionConfig{},
-			shouldErr:   false,
-		},
-	}
-	for _, test := range tests {
-		testutil.Run(t, test.description, func(t *testutil.T) {
-			values, err := imageSetFromConfig(test.strategy, test.valueName, test.tag)
-			t.CheckError(test.shouldErr, err)
-			t.CheckDeepEqual(test.expected, values)
-		})
-	}
-}
-
 func TestHelmRender(t *testing.T) {
 	tests := []struct {
 		description string
@@ -1360,7 +1289,7 @@ func TestHelmRender(t *testing.T) {
 				namespace: test.namespace,
 			}, latest.RenderConfig{
 				Generate: latest.Generate{Helm: &latest.Helm{Flags: test.helm.Flags, Releases: test.helm.Releases}},
-			}, labels, "default")
+			}, labels, "default", nil)
 			t.RequireNoError(err)
 			_, err = helmRenderer.Render(context.Background(), io.Discard, test.builds, true)
 			t.CheckError(test.shouldErr, err)

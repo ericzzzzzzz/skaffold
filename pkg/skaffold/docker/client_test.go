@@ -23,9 +23,9 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/cluster"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/util"
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/cluster"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/util"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 func TestNewEnvClient(t *testing.T) {
@@ -47,6 +47,13 @@ func TestNewEnvClient(t *testing.T) {
 				"DOCKER_CERT_PATH": "invalid/cert/path",
 			},
 			shouldErr: true,
+		},
+		{
+			description: "ssh",
+			envs: map[string]string{
+				"DOCKER_HOST": "ssh://127.0.0.1",
+			},
+			shouldErr: false,
 		},
 	}
 	for _, test := range tests {

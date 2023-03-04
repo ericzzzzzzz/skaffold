@@ -25,10 +25,10 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/GoogleContainerTools/skaffold/cmd/skaffold/app/flags"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/constants"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/instrumentation"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/v2/cmd/skaffold/app/flags"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/constants"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/instrumentation"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output/log"
 )
 
 var (
@@ -230,7 +230,7 @@ var flagRegistry = []Flag{
 		Value:         &opts.CustomLabels,
 		DefValue:      []string{},
 		FlagAddMethod: "StringSliceVar",
-		DefinedOn:     []string{"dev", "run", "debug", "deploy", "render", "filter"},
+		DefinedOn:     []string{"dev", "run", "debug", "deploy", "render", "filter", "apply"},
 	},
 	{
 		Name:          "toot",
@@ -327,7 +327,7 @@ var flagRegistry = []Flag{
 		Name:          "iterative-status-check",
 		Usage:         "Run `status-check` iteratively after each deploy step, instead of all-together at the end of all deploys (default).",
 		Value:         &opts.IterativeStatusCheck,
-		DefValue:      false,
+		DefValue:      true,
 		FlagAddMethod: "BoolVar",
 		DefinedOn:     []string{"dev", "debug", "deploy", "run", "apply"},
 		IsEnum:        true,
@@ -402,7 +402,7 @@ var flagRegistry = []Flag{
 		Value:         &opts.CustomTag,
 		DefValue:      "",
 		FlagAddMethod: "StringVar",
-		DefinedOn:     []string{"build", "debug", "dev", "run", "deploy"},
+		DefinedOn:     []string{"build", "debug", "dev", "run", "deploy", "render"},
 	},
 	{
 		Name:          "platform",
@@ -431,6 +431,15 @@ var flagRegistry = []Flag{
 		DefValue:      true,
 		FlagAddMethod: "BoolVar",
 		DefinedOn:     []string{"dev", "run", "debug", "deploy", "render", "build", "delete", "diagnose", "test", "verify"},
+		IsEnum:        true,
+	},
+	{
+		Name:          "auto",
+		Usage:         "Run with an auto-generated skaffold configuration. This will create a temporary `skaffold.yaml` file and kubernetes manifests necessary to run the application",
+		Value:         &opts.AutoInit,
+		DefValue:      false,
+		FlagAddMethod: "BoolVar",
+		DefinedOn:     []string{"debug", "dev", "run"},
 		IsEnum:        true,
 	},
 	{
@@ -561,9 +570,20 @@ var flagRegistry = []Flag{
 		IsEnum:        true,
 	},
 	{
-		Name:          "build-artifacts",
-		Shorthand:     "a",
-		Usage:         "File containing build result from a previous 'skaffold build --file-output'",
+		Name:      "build-artifacts",
+		Shorthand: "a",
+		Usage: `File containing pre-built images to use instead of rebuilding artifacts. A sample file looks like the following:
+{
+  "builds":[
+    {
+      "imageName":"registry/image1",
+      "tag":"registry/image1:tag"
+    },{
+      "imageName":"registry/image2",
+      "tag":"registry/image2:tag"
+    }]
+}
+The build result from a previous 'skaffold build --file-output' run can be used here`,
 		Value:         &fromBuildOutputFile,
 		DefValue:      "",
 		FlagAddMethod: "Var",
@@ -717,6 +737,22 @@ var flagRegistry = []Flag{
 		DefValue:      "",
 		FlagAddMethod: "StringVar",
 		DefinedOn:     []string{"dev", "run", "debug", "deploy", "apply", "delete"},
+	},
+	{
+		Name:          "keep-running-on-failure",
+		Shorthand:     "",
+		Usage:         "If true, the session will be suspended instead of ending if any errors occur, the user can fix the errors during the session suspension, the session can be restored and continued by pressing any key. ",
+		Value:         &opts.KeepRunningOnFailure,
+		DefValue:      false,
+		FlagAddMethod: "BoolVar",
+		DefinedOn:     []string{"dev", "debug"},
+	}, {
+		Name:          "set",
+		Usage:         "overrides templated manifest fields by provided key-value pairs",
+		Value:         &opts.ManifestsOverrides,
+		DefValue:      []string{},
+		FlagAddMethod: "StringSliceVar",
+		DefinedOn:     []string{"render"},
 	},
 }
 

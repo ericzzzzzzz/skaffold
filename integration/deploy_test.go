@@ -26,11 +26,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/GoogleContainerTools/skaffold/cmd/skaffold/app/flags"
-	"github.com/GoogleContainerTools/skaffold/integration/skaffold"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/util"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/walk"
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	"github.com/GoogleContainerTools/skaffold/v2/cmd/skaffold/app/flags"
+	"github.com/GoogleContainerTools/skaffold/v2/integration/skaffold"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/util"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/walk"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 func TestBuildDeploy(t *testing.T) {
@@ -126,7 +126,7 @@ func TestDeployTailDefaultNamespace(t *testing.T) {
 	// `--default-repo=` is used to cancel the default repo that is set by default.
 	out := skaffold.Deploy("--tail", "--images", "busybox:latest", "--default-repo=").InDir("testdata/deploy-hello-tail").RunLive(t)
 
-	defer skaffold.Delete().InDir("testdata/deploy-hello-tail").RunBackground(t)
+	defer skaffold.Delete().InDir("testdata/deploy-hello-tail").Run(t)
 	WaitForLogs(t, out, "Hello world!")
 }
 
@@ -170,8 +170,6 @@ func TestDeployWithoutWorkspaces(t *testing.T) {
 }
 
 func TestDeployDependenciesOrder(t *testing.T) {
-	MarkIntegrationTest(t, CanRunWithoutGcp)
-
 	tests := []struct {
 		description         string
 		dir                 string
@@ -202,6 +200,7 @@ func TestDeployDependenciesOrder(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
+			MarkIntegrationTest(t, CanRunWithoutGcp)
 			targetModule := []string{}
 			if test.moduleToDeploy != "" {
 				targetModule = []string{"--module", test.moduleToDeploy}
@@ -210,9 +209,10 @@ func TestDeployDependenciesOrder(t *testing.T) {
 			expectedFormatedDeployOrder := []string{}
 			for _, module := range test.expectedDeployOrder {
 				expectedFormatedDeployOrder = append(expectedFormatedDeployOrder, fmt.Sprintf(" - pod/%v created", module))
+				expectedFormatedDeployOrder = append(expectedFormatedDeployOrder, "Waiting for deployments to stabilize...")
+				expectedFormatedDeployOrder = append(expectedFormatedDeployOrder, "Deployments stabilized in \\d*\\.?\\d+ms")
 			}
 			expectedFormatedDeployOrder = append([]string{"Starting deploy..."}, expectedFormatedDeployOrder...)
-			expectedFormatedDeployOrder = append(expectedFormatedDeployOrder, "Waiting for deployments to stabilize...")
 			expectedOutput := strings.Join(expectedFormatedDeployOrder, "\n")
 
 			ns, _ := SetupNamespace(t)
@@ -220,7 +220,7 @@ func TestDeployDependenciesOrder(t *testing.T) {
 			defer skaffold.Delete().InDir(test.dir).InNs(ns.Name).RunOrFail(t)
 
 			output := string(outputBytes)
-			testutil.CheckContains(t, expectedOutput, output)
+			testutil.CheckRegex(t, expectedOutput, output)
 		})
 	}
 }

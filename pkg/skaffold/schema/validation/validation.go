@@ -28,21 +28,20 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/pkg/errors"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/build/misc"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/config"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/constants"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/docker"
-	sErrors "github.com/GoogleContainerTools/skaffold/pkg/skaffold/errors"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/parser"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/parser/configlocations"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/render/renderer/kpt"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/runner/runcontext"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/util"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/util/stringslice"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/yamltags"
-	"github.com/GoogleContainerTools/skaffold/proto/v1"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/build/misc"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/config"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/constants"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/docker"
+	sErrors "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/errors"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/parser"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/parser/configlocations"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/runner/runcontext"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/latest"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/util"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/util/stringslice"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/yamltags"
+	"github.com/GoogleContainerTools/skaffold/v2/proto/v1"
 )
 
 var (
@@ -87,8 +86,6 @@ func ProcessToErrorWithLocation(configs parser.SkaffoldConfigSet, validateConfig
 		errs = append(errs, validateTaggingPolicy(config, config.Build)...)
 		errs = append(errs, validateCustomTest(config, config.Test)...)
 		errs = append(errs, validateGCBConfig(config, config.Build)...)
-		errs = append(errs, validateVerifyTests(config, config.Verify)...)
-		errs = append(errs, validateKptRendererVersion(config, config.Deploy, config.Render)...)
 	}
 	errs = append(errs, validateArtifactDependencies(configs)...)
 	if validateConfig.CheckDeploySource {
@@ -99,25 +96,6 @@ func ProcessToErrorWithLocation(configs parser.SkaffoldConfigSet, validateConfig
 		return nil
 	}
 	return errs
-}
-
-func validateKptRendererVersion(cfg *parser.SkaffoldConfigEntry, dc latest.DeployConfig, rc latest.RenderConfig) (cfgErrs []ErrorWithLocation) {
-	if dc.KptDeploy != nil {
-		return
-	}
-
-	if rc.Kpt == nil && rc.Transform == nil && rc.Validate == nil { // no kpt renderer created
-		return
-	}
-
-	if err := kpt.CheckIsProperBinVersion(context.TODO()); err != nil {
-		cfgErrs = append(cfgErrs, ErrorWithLocation{
-			Error:    err,
-			Location: cfg.YAMLInfos.LocateField(cfg, "Render"),
-		})
-	}
-
-	return
 }
 
 // Process checks if the Skaffold pipeline is valid and returns all encountered errors as a concatenated string
@@ -141,7 +119,8 @@ func Process(configs parser.SkaffoldConfigSet, validateConfig Options) error {
 func ProcessWithRunContext(ctx context.Context, runCtx *runcontext.RunContext) error {
 	var errs []error
 	errs = append(errs, validateDockerNetworkContainerExists(ctx, runCtx.Artifacts(), runCtx)...)
-	errs = append(errs, validateVerifyTestsExistOnVerifyCommand(runCtx.DefaultPipeline().Verify, runCtx)...)
+	errs = append(errs, validateVerifyTestsExistOnVerifyCommand(runCtx)...)
+	errs = append(errs, validateVerifyTests(runCtx)...)
 	errs = append(errs, validateLocationSetForCloudRun(runCtx)...)
 
 	if len(errs) == 0 {
@@ -411,8 +390,12 @@ func validateDockerNetworkMode(cfg *parser.SkaffoldConfigEntry, artifacts []*lat
 }
 
 // Validate that test cases exist when `verify` is called, otherwise Skaffold should error
-func validateVerifyTestsExistOnVerifyCommand(tcs []*latest.VerifyTestCase, runCtx *runcontext.RunContext) []error {
+func validateVerifyTestsExistOnVerifyCommand(runCtx *runcontext.RunContext) []error {
 	var errs []error
+	tcs := []*latest.VerifyTestCase{}
+	for _, pipeline := range runCtx.GetPipelines() {
+		tcs = append(tcs, pipeline.Verify...)
+	}
 	if len(tcs) == 0 && runCtx.Opts.Command == "verify" {
 		errs = append(errs, fmt.Errorf("verify command expects non-zero number of test cases"))
 	}
@@ -722,30 +705,25 @@ func validateLogPrefix(cfg *parser.SkaffoldConfigEntry, lc latest.LogsConfig) []
 // validateVerifyTests
 // - makes sure that each test name is unique
 // - makes sure that each container name is unique
-func validateVerifyTests(cfg *parser.SkaffoldConfigEntry, tcs []*latest.VerifyTestCase) (cfgErrs []ErrorWithLocation) {
+func validateVerifyTests(runCtx *runcontext.RunContext) []error {
+	var errs []error
 	seenTestName := map[string]bool{}
 	seenContainerName := map[string]bool{}
-	for i, tc := range tcs {
+	tcs := []*latest.VerifyTestCase{}
+	for _, pipeline := range runCtx.GetPipelines() {
+		tcs = append(tcs, pipeline.Verify...)
+	}
+	for _, tc := range tcs {
 		if _, ok := seenTestName[tc.Name]; ok {
-			return []ErrorWithLocation{
-				{
-					Error:    fmt.Errorf("found duplicate test name '%s' in 'verify' test cases. 'verify' test case names must be unique", tc.Name),
-					Location: cfg.YAMLInfos.Locate(&cfg.Verify[i]),
-				},
-			}
+			errs = append(errs, fmt.Errorf("found duplicate test name '%s' in 'verify' test cases. 'verify' test case names must be unique", tc.Name))
 		}
 		if _, ok := seenContainerName[tc.Container.Name]; ok {
-			return []ErrorWithLocation{
-				{
-					Error:    fmt.Errorf("found duplicate container name '%s' in 'verify' test cases. 'verify' container names must be unique", tc.Container.Name),
-					Location: cfg.YAMLInfos.Locate(&cfg.Verify[i]),
-				},
-			}
+			errs = append(errs, fmt.Errorf("found duplicate container name '%s' in 'verify' test cases. 'verify' container names must be unique", tc.Container.Name))
 		}
 		seenTestName[tc.Name] = true
 		seenContainerName[tc.Container.Name] = true
 	}
-	return nil
+	return errs
 }
 
 // validateCustomTest

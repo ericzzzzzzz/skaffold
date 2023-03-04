@@ -22,8 +22,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/GoogleContainerTools/skaffold/integration/skaffold"
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	"github.com/GoogleContainerTools/skaffold/v2/integration/skaffold"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 func TestHelmDeploy(t *testing.T) {
@@ -33,7 +33,7 @@ func TestHelmDeploy(t *testing.T) {
 
 	// To fix #1823, we make use of env variable templating for release name
 	env := []string{fmt.Sprintf("TEST_NS=%s", ns.Name)}
-	skaffold.Deploy("--images", "gcr.io/k8s-skaffold/skaffold-helm").InDir("testdata/helm").InNs(ns.Name).WithEnv(env).RunOrFail(t)
+	skaffold.Deploy("--images", "us-central1-docker.pkg.dev/k8s-skaffold/testing/skaffold-helm").InDir("testdata/helm").InNs(ns.Name).WithEnv(env).RunOrFail(t)
 
 	dep := client.GetDeployment("skaffold-helm-" + ns.Name)
 	testutil.CheckDeepEqual(t, dep.Name, dep.ObjectMeta.Labels["release"])
@@ -41,8 +41,7 @@ func TestHelmDeploy(t *testing.T) {
 	skaffold.Delete().InDir("testdata/helm").InNs(ns.Name).WithEnv(env).RunOrFail(t)
 }
 
-func TestDevHelmMultiConfig(t *testing.T) {
-	MarkIntegrationTest(t, CanRunWithoutGcp)
+func TestRunHelmMultiConfig(t *testing.T) {
 	var tests = []struct {
 		description  string
 		dir          string
@@ -64,6 +63,7 @@ func TestDevHelmMultiConfig(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
+			MarkIntegrationTest(t, CanRunWithoutGcp)
 			if test.targetLogOne == "" || test.targetLogTwo == "" {
 				t.SkipNow()
 			}
@@ -77,6 +77,8 @@ func TestDevHelmMultiConfig(t *testing.T) {
 
 			ns, _ := SetupNamespace(t)
 
+			skaffold.Run(test.args...).InDir(test.dir).InNs(ns.Name).WithEnv(test.env).RunOrFailOutput(t)
+
 			out := skaffold.Run(test.args...).InDir(test.dir).InNs(ns.Name).WithEnv(test.env).RunLive(t)
 			defer skaffold.Delete().InDir(test.dir).InNs(ns.Name).WithEnv(test.env).Run(t)
 
@@ -84,4 +86,92 @@ func TestDevHelmMultiConfig(t *testing.T) {
 			WaitForLogs(t, out, test.targetLogTwo)
 		})
 	}
+}
+
+func TestRunHelmStatefulSet(t *testing.T) {
+	var tests = []struct {
+		description string
+		dir         string
+		args        []string
+		pods        []string
+		env         []string
+		targetLog   string
+	}{
+		{
+			description: "helm-statefulset-v1-schema",
+			dir:         "testdata/helm-statefulset-v1-schema",
+			targetLog:   "statefulset/skaffold-helm is ready",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			MarkIntegrationTest(t, CanRunWithoutGcp)
+			if test.targetLog == "" {
+				t.SkipNow()
+			}
+			if test.dir == emptydir {
+				err := os.MkdirAll(filepath.Join(test.dir, "emptydir"), 0755)
+				t.Log("Creating empty directory")
+				if err != nil {
+					t.Errorf("Error creating empty dir: %s", err)
+				}
+			}
+
+			ns, _ := SetupNamespace(t)
+
+			out := skaffold.Run(test.args...).InDir(test.dir).InNs(ns.Name).WithEnv(test.env).RunOrFailOutput(t)
+			defer skaffold.Delete().InDir(test.dir).InNs(ns.Name).WithEnv(test.env).Run(t)
+
+			testutil.CheckContains(t, test.targetLog, string(out))
+		})
+	}
+}
+
+func TestHelmRenderWithOCIRegistry(t *testing.T) {
+	MarkIntegrationTest(t, NeedsGcp)
+
+	skaffoldConfig := fmt.Sprintf(`apiVersion: skaffold/v4beta1
+kind: Config
+
+deploy:
+  helm:
+    releases:
+    - name: skaffold-helm-chart-oci
+      remoteChart: oci://%s/skaffold-helm-chart
+      setValues:
+        image: skaffold-helm`, skaffold.DefaultRepo)
+
+	expectedOutput := `---
+# Source: skaffold-helm-chart/templates/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skaffold-helm-chart
+  labels:
+    app: skaffold-helm-chart
+spec:
+  selector:
+    matchLabels:
+      app: skaffold-helm-chart
+  replicas: 2
+  template:
+    metadata:
+      labels:
+        app: skaffold-helm-chart
+    spec:
+      containers:
+      - name: skaffold-helm-chart
+        image: skaffold-helm
+`
+
+	tmpDir := testutil.NewTempDir(t)
+	tmpDir.Write("skaffold.yaml", skaffoldConfig)
+	tmpDir.Chdir()
+
+	skaffold.Render("--output", "rendered.yaml").RunOrFail(t)
+	fileContent, err := os.ReadFile("rendered.yaml")
+
+	testutil.CheckError(t, false, err)
+	testutil.CheckDeepEqual(t, expectedOutput, string(fileContent))
 }

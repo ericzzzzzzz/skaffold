@@ -35,12 +35,12 @@ GKE_CLUSTER_NAME ?= integration-tests
 GKE_ZONE ?= us-central1-a
 
 SUPPORTED_PLATFORMS = linux-amd64 darwin-amd64 windows-amd64.exe linux-arm64 darwin-arm64
-BUILD_PACKAGE = $(REPOPATH)/cmd/skaffold
+BUILD_PACKAGE = $(REPOPATH)/v2/cmd/skaffold
 
 SKAFFOLD_TEST_PACKAGES = ./pkg/skaffold/... ./cmd/... ./hack/... ./pkg/webhook/...
 GO_FILES = $(shell find . -type f -name '*.go' -not -path "./pkg/diag/*")
 
-VERSION_PACKAGE = $(REPOPATH)/pkg/skaffold/version
+VERSION_PACKAGE = $(REPOPATH)/v2/pkg/skaffold/version
 COMMIT = $(shell git rev-parse HEAD)
 
 ifeq "$(strip $(VERSION))" ""
@@ -59,6 +59,8 @@ GO_LDFLAGS += -X $(VERSION_PACKAGE).buildDate=$(BUILD_DATE)
 GO_LDFLAGS += -X $(VERSION_PACKAGE).gitCommit=$(COMMIT)
 GO_LDFLAGS += -s -w
 
+GO_BUILD_TAGS = timetzdata
+
 GO_BUILD_TAGS_linux = osusergo netgo static_build release
 LDFLAGS_linux = -static
 
@@ -73,7 +75,7 @@ endif
 # when build for local development (`LOCAL=true make install` can skip license check)
 $(BUILD_DIR)/$(PROJECT): $(EMBEDDED_FILES_CHECK) $(GO_FILES) $(BUILD_DIR)
 	$(eval ldflags = $(GO_LDFLAGS) $(patsubst %,-extldflags \"%\",$(LDFLAGS_$(GOOS))))
-	$(eval tags = $(GO_BUILD_TAGS_$(GOOS)) $(GO_BUILD_TAGS_$(GOOS)_$(GOARCH)))
+	$(eval tags = $(GO_BUILD_TAGS) $(GO_BUILD_TAGS_$(GOOS)) $(GO_BUILD_TAGS_$(GOOS)_$(GOARCH)))
 	GOOS=$(GOOS) GOARCH=$(GOARCH) CGO_ENABLED=1 \
 	    go build -gcflags="all=-N -l" -tags "$(tags)" -ldflags "$(ldflags)" -o $@ $(BUILD_PACKAGE)
 ifeq ($(GOOS),darwin)
@@ -95,7 +97,7 @@ $(BUILD_DIR)/$(PROJECT)-%: $(EMBEDDED_FILES_CHECK) $(GO_FILES) $(BUILD_DIR)
 	$(eval os = $(firstword $(subst -, ,$*)))
 	$(eval arch = $(lastword $(subst -, ,$(subst .exe,,$*))))
 	$(eval ldflags = $(GO_LDFLAGS) $(patsubst %,-extldflags \"%\",$(LDFLAGS_$(os))))
-	$(eval tags = $(GO_BUILD_TAGS_$(os)) $(GO_BUILD_TAGS_$(os)_$(arch)))
+	$(eval tags = $(GO_BUILD_TAGS) $(GO_BUILD_TAGS_$(os)) $(GO_BUILD_TAGS_$(os)_$(arch)))
 	GOOS=$(os) GOARCH=$(arch) CGO_ENABLED=1 go build -tags "$(tags)" -ldflags "$(ldflags)" -o $@ ./cmd/skaffold
 	(cd `dirname $@`; shasum -a 256 `basename $@`) | tee $@.sha256
 	file $@ || true
@@ -112,6 +114,10 @@ test: $(BUILD_DIR)
 	@ ./hack/gotest.sh -count=1 -race -short -timeout=90s $(SKAFFOLD_TEST_PACKAGES)
 	@ ./hack/checks.sh
 	@ ./hack/linters.sh
+
+.PHONY: unit-tests
+unit-tests: $(BUILD_DIR)
+	@ ./hack/gotest.sh -count=1 -race -short -timeout=90s $(SKAFFOLD_TEST_PACKAGES)
 
 .PHONY: coverage
 coverage: $(BUILD_DIR)
@@ -137,8 +143,9 @@ ifeq ($(GCP_ONLY),true)
 		$(GKE_CLUSTER_NAME) \
 		--zone $(GKE_ZONE) \
 		--project $(GCP_PROJECT)
+	gcloud auth configure-docker us-central1-docker.pkg.dev
 endif
-	@ GCP_ONLY=$(GCP_ONLY) GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) ./hack/gotest.sh -v $(REPOPATH)/integration/binpack $(REPOPATH)/integration -timeout 50m $(INTEGRATION_TEST_ARGS)
+	@ GCP_ONLY=$(GCP_ONLY) GKE_CLUSTER_NAME=$(GKE_CLUSTER_NAME) ./hack/gotest.sh -v $(REPOPATH)/v2/integration -timeout 50m $(INTEGRATION_TEST_ARGS)
 
 .PHONY: integration
 integration: install integration-tests
@@ -298,11 +305,11 @@ submit-release-trigger:
 
 .PHONY: preview-docs
 preview-docs:
-	./deploy/docs/local-preview.sh hugo serve -D --bind=0.0.0.0 --ignoreCache
+	./deploy/docs-v1/local-preview.sh hugo serve -D --bind=0.0.0.0 --ignoreCache
 
 .PHONY: build-docs-preview
 build-docs-preview:
-	./deploy/docs/local-preview.sh hugo --baseURL=https://skaffold.dev
+	./deploy/docs-v1/local-preview.sh hugo --baseURL=https://skaffold.dev
 
 .PHONY: preview-docs-v2
 preview-docs-v2:
@@ -325,7 +332,7 @@ generate-schemas-v2:
 # telemetry generation
 .PHONY: generate-schemas
 generate-telemetry-json:
-	go run hack/struct-json/main.go -- pkg/skaffold/instrumentation/types.go docs/content/en/docs/resources/telemetry/metrics.json
+	go run hack/struct-json/main.go -- pkg/skaffold/instrumentation/types.go docs-v1/content/en/docs/resources/telemetry/metrics.json
 
 # telemetry generation
 .PHONY: generate-schemas-v2
@@ -339,7 +346,7 @@ flags-dashboard:
 
 # static files
 
-$(EMBEDDED_FILES_CHECK): go.mod docs/content/en/schemas/* docs-v2/content/en/schemas/*
+$(EMBEDDED_FILES_CHECK): go.mod docs-v1/content/en/schemas/* docs-v2/content/en/schemas/*
 	hack/generate-embedded-files.sh
 
 # run comparisonstats - ex: make COMPARISONSTATS_ARGS='usr/local/bin/skaffold /usr/local/bin/skaffold helm-deployment main.go "//per-dev-iteration-comment"' comparisonstats

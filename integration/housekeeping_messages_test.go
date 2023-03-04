@@ -19,8 +19,8 @@ package integration
 import (
 	"testing"
 
-	"github.com/GoogleContainerTools/skaffold/integration/skaffold"
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	"github.com/GoogleContainerTools/skaffold/v2/integration/skaffold"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 func TestHouseKeepingMessagesNotShownForDiagnose(t *testing.T) {
@@ -35,5 +35,5 @@ func TestHouseKeepingMessagesShownForDev(t *testing.T) {
 	file := testutil.TempFile(t, "config", nil)
 	out := skaffold.Run("-c", file, "--update-check=true").InDir("examples/getting-started").RunOrFailOutput(t)
 	testutil.CheckContains(t, "Help improve Skaffold", string(out))
-	skaffold.Delete().InDir("examples/getting-started")
+	skaffold.Delete().InDir("examples/getting-started").Run(t)
 }

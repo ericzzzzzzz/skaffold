@@ -20,7 +20,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/latest"
 )
 
 // WaitForDeletions configures the wait for pending deletions.
@@ -48,6 +48,7 @@ type SkaffoldOptions struct {
 	ForceLoadImages             bool
 	IterativeStatusCheck        bool
 	FastFailStatusCheck         bool
+	KeepRunningOnFailure        bool
 	TolerateFailuresStatusCheck bool
 	Notification                bool
 	NoPrune                     bool
@@ -59,6 +60,7 @@ type SkaffoldOptions struct {
 	SkipConfigDefaults          bool
 	Tail                        bool
 	WaitForConnection           bool
+	AutoInit                    bool
 	EnablePlatformNodeAffinity  bool
 	EnableGKEARMNodeToleration  bool
 	DisableMultiPlatformBuild   bool
@@ -107,6 +109,7 @@ type SkaffoldOptions struct {
 	DefaultRepo                 StringOrUndefined
 	SyncRemoteCache             SyncRemoteCacheOption
 	WaitForDeletions            WaitForDeletions
+	ManifestsOverrides          []string
 }
 
 type RunMode string

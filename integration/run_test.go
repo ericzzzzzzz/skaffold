@@ -27,8 +27,8 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/util/wait"
 
-	"github.com/GoogleContainerTools/skaffold/integration/skaffold"
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	"github.com/GoogleContainerTools/skaffold/v2/integration/skaffold"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 const (
@@ -176,9 +176,10 @@ var tests = []struct {
 }
 
 func TestRun(t *testing.T) {
-	MarkIntegrationTest(t, CanRunWithoutGcp)
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
+			MarkIntegrationTest(t, CanRunWithoutGcp)
+
 			ns, client := SetupNamespace(t)
 			args := append(test.args, "--cache-artifacts=false")
 			if test.dir == emptydir {
@@ -199,10 +200,10 @@ func TestRun(t *testing.T) {
 }
 
 func TestRunTail(t *testing.T) {
-	MarkIntegrationTest(t, CanRunWithoutGcp)
-
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
+			MarkIntegrationTest(t, CanRunWithoutGcp)
+
 			if test.targetLog == "" {
 				t.SkipNow()
 			}
@@ -226,10 +227,10 @@ func TestRunTail(t *testing.T) {
 }
 
 func TestRunTailDefaultNamespace(t *testing.T) {
-	MarkIntegrationTest(t, CanRunWithoutGcp)
-
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
+			MarkIntegrationTest(t, CanRunWithoutGcp)
+
 			if test.targetLog == "" {
 				t.SkipNow()
 			}
@@ -250,7 +251,6 @@ func TestRunTailDefaultNamespace(t *testing.T) {
 }
 
 func TestRunTailTolerateFailuresUntilDeadline(t *testing.T) {
-	MarkIntegrationTest(t, CanRunWithoutGcp)
 	var tsts = []struct {
 		description  string
 		dir          string
@@ -273,6 +273,7 @@ func TestRunTailTolerateFailuresUntilDeadline(t *testing.T) {
 
 	for _, test := range tsts {
 		t.Run(test.description, func(t *testing.T) {
+			MarkIntegrationTest(t, CanRunWithoutGcp)
 			if test.targetLogOne == "" || test.targetLogTwo == "" {
 				t.SkipNow()
 			}
@@ -317,17 +318,18 @@ func TestRunRenderOnly(t *testing.T) {
 
 func TestRunGCPOnly(t *testing.T) {
 	tests := []struct {
-		description string
-		dir         string
-		args        []string
-		deployments []string
-		pods        []string
+		description       string
+		dir               string
+		args              []string
+		deployments       []string
+		pods              []string
+		skipCrossPlatform bool
 	}{
-		// {
-		//	description: "Google Cloud Build",
-		//	dir:         "examples/google-cloud-build",
-		//	pods:        []string{"getting-started"},
-		// },
+		{
+			description: "Google Cloud Build",
+			dir:         "examples/google-cloud-build",
+			pods:        []string{"getting-started"},
+		},
 		{
 			description: "Google Cloud Build with sub folder",
 			dir:         "testdata/gcb-sub-folder",
@@ -344,31 +346,33 @@ func TestRunGCPOnly(t *testing.T) {
 			args:        []string{"-p", "gcb"},
 			pods:        []string{"module1", "module2"},
 		},
-		// {
-		//	description: "Google Cloud Build with Kaniko",
-		//	dir:         "examples/gcb-kaniko",
-		//	pods:        []string{"getting-started-kaniko"},
-		// },
-		// {
-		//	description: "kaniko",
-		//	dir:         "examples/kaniko",
-		//	pods:        []string{"getting-started-kaniko"},
-		// },
-		// {
-		//	description: "kaniko with target",
-		//	dir:         "testdata/kaniko-target",
-		//	pods:        []string{"getting-started-kaniko"},
-		// },
+		{
+			description: "Google Cloud Build with Kaniko",
+			dir:         "examples/gcb-kaniko",
+			pods:        []string{"getting-started-kaniko"},
+			// building machines on gcb are linux/amd64, kaniko doesn't support cross-platform builds.
+			skipCrossPlatform: true,
+		},
+		{
+			description: "kaniko",
+			dir:         "examples/kaniko",
+			pods:        []string{"getting-started-kaniko"},
+		},
+		{
+			description: "kaniko with target",
+			dir:         "testdata/kaniko-target",
+			pods:        []string{"getting-started-kaniko"},
+		},
 		{
 			description: "kaniko with sub folder",
 			dir:         "testdata/kaniko-sub-folder",
 			pods:        []string{"getting-started-kaniko"},
 		},
-		// {
-		//	description: "kaniko microservices",
-		//	dir:         "testdata/kaniko-microservices",
-		//	deployments: []string{"leeroy-app", "leeroy-web"},
-		// },
+		{
+			description: "kaniko microservices",
+			dir:         "testdata/kaniko-microservices",
+			deployments: []string{"leeroy-app", "leeroy-web"},
+		},
 		{
 			description: "jib in googlecloudbuild",
 			dir:         "testdata/jib",
@@ -386,11 +390,13 @@ func TestRunGCPOnly(t *testing.T) {
 			dir:         "examples/buildpacks",
 			args:        []string{"-p", "gcb"},
 			deployments: []string{"web"},
+			// buildpacks doesn't support arm64 builds.
+			skipCrossPlatform: true,
 		},
 	}
 	for _, test := range tests {
-		if (os.Getenv("GKE_CLUSTER_NAME") == "integration-tests-arm" || os.Getenv("GKE_CLUSTER_NAME") == "integration-tests-hybrid") && strings.Contains(test.description, "buildpacks") {
-			continue // buildpacks doesn't support arm64 builds, so skip run on these clusters
+		if (os.Getenv("GKE_CLUSTER_NAME") == "integration-tests-arm" || os.Getenv("GKE_CLUSTER_NAME") == "integration-tests-hybrid") && test.skipCrossPlatform {
+			continue
 		}
 		t.Run(test.description, func(t *testing.T) {
 			MarkIntegrationTest(t, NeedsGcp)
@@ -483,8 +489,6 @@ func TestRunTailDeployment(t *testing.T) {
 }
 
 func TestRunTest(t *testing.T) {
-	MarkIntegrationTest(t, CanRunWithoutGcp)
-
 	tests := []struct {
 		description  string
 		testDir      string
@@ -519,6 +523,8 @@ func TestRunTest(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.description, func(t *testing.T) {
+			MarkIntegrationTest(t, CanRunWithoutGcp)
+
 			defer os.Remove(test.testFile)
 
 			// Run skaffold build first to fail quickly on a build failure
@@ -565,8 +571,8 @@ func TestRunNoOptFlags(t *testing.T) {
 		},
 	}
 
-	MarkIntegrationTest(t, CanRunWithoutGcp)
 	t.Run(test.description, func(t *testing.T) {
+		MarkIntegrationTest(t, CanRunWithoutGcp)
 		ns, _ := SetupNamespace(t)
 
 		args := append(test.args, "--tail")
@@ -575,4 +581,33 @@ func TestRunNoOptFlags(t *testing.T) {
 
 		WaitForLogs(t, out, test.targetLog)
 	})
+}
+
+func TestRunKubectlDefaultNamespace(t *testing.T) {
+	tests := []struct {
+		description       string
+		namespaceToCreate string
+		projectDir        string
+		podName           string
+		envVariable       string
+	}{
+		{
+			description:       "run with defaultNamespace when namespace exists in cluster",
+			namespaceToCreate: "namespace-test",
+			projectDir:        "testdata/kubectl-with-default-namespace",
+			podName:           "getting-started",
+			envVariable:       "ENV1",
+		},
+	}
+
+	for _, test := range tests {
+		testutil.Run(t, test.description, func(t *testutil.T) {
+			MarkIntegrationTest(t.T, CanRunWithoutGcp)
+			ns, client := SetupNamespace(t.T)
+			t.Setenv(test.envVariable, ns.Name)
+			skaffold.Run().InDir(test.projectDir).RunOrFail(t.T)
+			pod := client.GetPod(test.podName)
+			t.CheckNotNil(pod)
+		})
+	}
 }

@@ -28,20 +28,22 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	k8syaml "sigs.k8s.io/yaml"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/access"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/config"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/debug"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/deploy/label"
-	sErrors "github.com/GoogleContainerTools/skaffold/pkg/skaffold/errors"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/gcp"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/graph"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubernetes/manifest"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/log"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/status"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/sync"
-	"github.com/GoogleContainerTools/skaffold/proto/v1"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/access"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/config"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/debug"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/deploy/label"
+	sErrors "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/errors"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/gcp"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/graph"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/hooks"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/instrumentation"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/manifest"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/log"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/latest"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/status"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/sync"
+	"github.com/GoogleContainerTools/skaffold/v2/proto/v1"
 )
 
 // Config contains config options needed for cloud run
@@ -55,10 +57,14 @@ type Config interface {
 // Deployer deploys code to Google Cloud Run.
 type Deployer struct {
 	configName string
+
+	*latest.CloudRunDeploy
+
 	logger     *LogAggregator
 	accessor   *RunAccessor
 	monitor    *Monitor
 	labeller   *label.DefaultLabeller
+	hookRunner hooks.Runner
 
 	Project string
 	Region  string
@@ -71,13 +77,15 @@ type Deployer struct {
 // NewDeployer creates a new Deployer for Cloud Run from the Skaffold deploy config.
 func NewDeployer(cfg Config, labeller *label.DefaultLabeller, crDeploy *latest.CloudRunDeploy, configName string) (*Deployer, error) {
 	return &Deployer{
-		configName: configName,
-		Project:    crDeploy.ProjectID,
-		Region:     crDeploy.Region,
+		configName:     configName,
+		CloudRunDeploy: crDeploy,
+		Project:        crDeploy.ProjectID,
+		Region:         crDeploy.Region,
 		// TODO: implement logger for Cloud Run.
 		logger:        NewLoggerAggregator(cfg, labeller.GetRunID()),
 		accessor:      NewAccessor(cfg, labeller.GetRunID()),
 		labeller:      labeller,
+		hookRunner:    hooks.NewCloudRunDeployRunner(crDeploy.LifecycleHooks, hooks.NewDeployEnvOpts(labeller.GetRunID(), "", []string{})),
 		useGcpOptions: true,
 	}, nil
 }
@@ -141,6 +149,30 @@ func (d *Deployer) RegisterLocalImages([]graph.Artifact) {
 // GetStatusMonitor gets the resource that will monitor deployment status.
 func (d *Deployer) GetStatusMonitor() status.Monitor {
 	return d.getMonitor()
+}
+
+func (d *Deployer) HasRunnableHooks() bool {
+	return len(d.CloudRunDeploy.LifecycleHooks.PreHooks) > 0 || len(d.CloudRunDeploy.LifecycleHooks.PostHooks) > 0
+}
+
+func (d *Deployer) PreDeployHooks(ctx context.Context, out io.Writer) error {
+	childCtx, endTrace := instrumentation.StartTrace(ctx, "Deploy_PreHooks")
+	if err := d.hookRunner.RunPreHooks(childCtx, out); err != nil {
+		endTrace(instrumentation.TraceEndError(err))
+		return err
+	}
+	endTrace()
+	return nil
+}
+
+func (d *Deployer) PostDeployHooks(ctx context.Context, out io.Writer) error {
+	childCtx, endTrace := instrumentation.StartTrace(ctx, "Deploy_PostHooks")
+	if err := d.hookRunner.RunPostHooks(childCtx, out); err != nil {
+		endTrace(instrumentation.TraceEndError(err))
+		return err
+	}
+	endTrace()
+	return nil
 }
 
 func (d *Deployer) getMonitor() *Monitor {

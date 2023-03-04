@@ -22,11 +22,11 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/util"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/util"
 )
 
 // This config version is not yet released, it is SAFE TO MODIFY the structs in this file.
-const Version string = "skaffold/v4beta1"
+const Version string = "skaffold/v4beta3"
 
 // NewSkaffoldConfig creates a SkaffoldConfig
 func NewSkaffoldConfig() util.VersionedConfig {
@@ -751,6 +751,9 @@ type CloudRunDeploy struct {
 	// Region GCP location to use for the Cloud Run Deploy.
 	// Must be one of the regions listed in https://cloud.google.com/run/docs/locations.
 	Region string `yaml:"region,omitempty"`
+
+	// LifecycleHooks describes a set of lifecycle host hooks that are executed before and after the Cloud Run deployer.
+	LifecycleHooks CloudRunDeployHooks `yaml:"hooks,omitempty"`
 }
 
 // DockerDeploy uses the `docker` CLI to create application containers in Docker.
@@ -909,27 +912,6 @@ type HelmPackaged struct {
 	AppVersion string `yaml:"appVersion,omitempty"`
 }
 
-// HelmImageConfig describes an image configuration.
-type HelmImageConfig struct {
-	// HelmFQNConfig is the image configuration uses the syntax `IMAGE-NAME=IMAGE-REPOSITORY:IMAGE-TAG`.
-	HelmFQNConfig *HelmFQNConfig `yaml:"fqn,omitempty" yamltags:"oneOf=helmImageStrategy"`
-
-	// HelmConventionConfig is the image configuration uses the syntax `IMAGE-NAME.repository=IMAGE-REPOSITORY, IMAGE-NAME.tag=IMAGE-TAG`.
-	HelmConventionConfig *HelmConventionConfig `yaml:"helm,omitempty" yamltags:"oneOf=helmImageStrategy"`
-}
-
-// HelmFQNConfig is the image config to use the FullyQualifiedImageName as param to set.
-type HelmFQNConfig struct {
-	// Property defines the image config.
-	Property string `yaml:"property,omitempty"`
-}
-
-// HelmConventionConfig is the image config in the syntax of image.repository and image.tag.
-type HelmConventionConfig struct {
-	// ExplicitRegistry separates `image.registry` to the image config syntax. Useful for some charts e.g. `postgresql`.
-	ExplicitRegistry bool `yaml:"explicitRegistry,omitempty"`
-}
-
 // LogsConfig configures how container logs are printed as a result of a deployment.
 type LogsConfig struct {
 	// Prefix defines the prefix shown on each log line. Valid values are
@@ -982,6 +964,9 @@ type Artifact struct {
 	// Each platform is of the format `os[/arch[/variant]]`, e.g., `linux/amd64`.
 	// Example: `["linux/amd64", "linux/arm64"]`.
 	Platforms []string `yaml:"platforms,omitempty"`
+
+	// RuntimeType specifies the target language runtime for this artifact that is used to configure debug support. Should be one of `go`, `nodejs`, `jvm`, `python` or `netcore`. If unspecified the language runtime is inferred from common heuristics for the list of supported runtimes.
+	RuntimeType string `yaml:"runtimeType,omitempty"`
 }
 
 // Sync *beta* specifies what files to sync into the container.
@@ -1381,6 +1366,9 @@ type KanikoArtifact struct {
 
 	// ContextSubPath is to specify a sub path within the context.
 	ContextSubPath string `yaml:"contextSubPath,omitempty" skaffold:"filepath"`
+
+	// IgnorePaths is a list of ignored paths when making an image snapshot.
+	IgnorePaths []string `yaml:"ignorePaths,omitempty"`
 }
 
 // DockerArtifact describes an artifact built from a Dockerfile,
@@ -1565,6 +1553,14 @@ type RenderHooks struct {
 	PreHooks []RenderHookItem `yaml:"before,omitempty"`
 	// PostHooks describes the list of lifecycle hooks to execute *after* each render step.
 	PostHooks []RenderHookItem `yaml:"after,omitempty"`
+}
+
+// CloudRunDeployHooks describes the list of lifecycle hooks to execute in the host before and after the Cloud Run deployer.
+type CloudRunDeployHooks struct {
+	// PreHooks describes the list of lifecycle hooks to execute *before* the Cloud Run deployer.
+	PreHooks []HostHook `yaml:"before,omitempty"`
+	// PostHooks describes the list of lifecycle hooks to execute *after* the Cloud Run deployer.
+	PostHooks []HostHook `yaml:"after,omitempty"`
 }
 
 // DeployHookItem describes a single lifecycle hook to execute before or after each deployer step.

@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 func TestEnvTemplate_ExecuteEnvTemplate(t *testing.T) {
@@ -196,6 +196,40 @@ func TestDefaultFunc(t *testing.T) {
 			if defaultFunc(dflt, nonEmpty) == dflt {
 				t.Error("should not return default")
 			}
+		})
+	}
+}
+
+func TestRunCmdFunc(t *testing.T) {
+	tests := []struct {
+		description     string
+		commandName     string
+		args            []string
+		output          string
+		expectedCommand string
+		err             error
+	}{
+		{
+			description:     "test running command succeeds",
+			commandName:     "bash",
+			args:            []string{"-c", "git rev-parse --verify HEAD"},
+			output:          "123",
+			expectedCommand: "bash -c git rev-parse --verify HEAD",
+		},
+		{
+			description:     "test running command fails",
+			commandName:     "bash",
+			args:            []string{"-c", "gib rev-parse --verify HEAD"},
+			output:          "",
+			expectedCommand: "bash -c gib rev-parse --verify HEAD",
+			err:             fmt.Errorf("command not found"),
+		},
+	}
+	for _, test := range tests {
+		testutil.Run(t, test.description, func(t *testutil.T) {
+			t.Override(&DefaultExecCommand, testutil.CmdRunOut(test.expectedCommand, test.output))
+			out, _ := runCmdFunc(test.commandName, test.args...)
+			t.CheckErrorAndDeepEqual(test.err != nil, test.err, test.output, out)
 		})
 	}
 }

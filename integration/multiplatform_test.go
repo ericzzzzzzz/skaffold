@@ -26,13 +26,13 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	k8sv1 "k8s.io/api/core/v1"
 
-	"github.com/GoogleContainerTools/skaffold/integration/skaffold"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/docker"
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	"github.com/GoogleContainerTools/skaffold/v2/integration/skaffold"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/docker"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 const (
-	defaultRepo       = "gcr.io/k8s-skaffold"
+	defaultRepo       = "us-central1-docker.pkg.dev/k8s-skaffold/testing"
 	hybridClusterName = "integration-tests-hybrid"
 	armClusterName    = "integration-tests-arm"
 )
@@ -162,7 +162,7 @@ func TestMultiplatformWithDevAndDebug(t *testing.T) {
 			expectedPlatforms := expectedPlatformsForRunningCluster(test.expectedPlatforms)
 
 			test.command(args...).InDir(test.dir).InNs(ns.Name).RunBackground(t)
-			defer skaffold.Delete().InDir(test.dir).InNs(ns.Name).RunBackground(t)
+			defer skaffold.Delete().InDir(test.dir).InNs(ns.Name).Run(t)
 
 			for _, image := range test.images {
 				client.WaitForPodsReady(image.pod)

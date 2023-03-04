@@ -19,11 +19,12 @@ package runner
 import (
 	"context"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/hooks"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/render/renderer"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/render/renderer/helm"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/runner/runcontext"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/hooks"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/render/renderer"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/render/renderer/helm"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/runner/runcontext"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/latest"
+	pkgutil "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/util"
 )
 
 // GetRenderer creates a renderer from a given RunContext and pipeline definitions.
@@ -33,7 +34,7 @@ func GetRenderer(ctx context.Context, runCtx *runcontext.RunContext, hydrationDi
 	var gr renderer.GroupRenderer
 	for _, configName := range configNames {
 		p := runCtx.Pipelines.GetForConfigName(configName)
-		rs, err := renderer.New(ctx, runCtx, p.Render, hydrationDir, labels, configName)
+		rs, err := renderer.New(ctx, runCtx, p.Render, hydrationDir, labels, configName, pkgutil.EnvSliceToMap(runCtx.Opts.ManifestsOverrides, "="))
 		if err != nil {
 			return nil, err
 		}
@@ -46,18 +47,18 @@ func GetRenderer(ctx context.Context, runCtx *runcontext.RunContext, hydrationDi
 	if usingLegacyHelmDeploy && runCtx.Opts.Command == "render" {
 		for _, configName := range configNames {
 			p := runCtx.Pipelines.GetForConfigName(configName)
-
-			if p.Deploy.LegacyHelmDeploy == nil {
+			legacyHelmReleases := filterDuplicates(p.Deploy.LegacyHelmDeploy, p.Render.Helm)
+			if len(legacyHelmReleases) == 0 {
 				continue
 			}
 			rCfg := latest.RenderConfig{
 				Generate: latest.Generate{
 					Helm: &latest.Helm{
-						Releases: p.Deploy.LegacyHelmDeploy.Releases,
+						Releases: legacyHelmReleases,
 					},
 				},
 			}
-			r, err := helm.New(runCtx, rCfg, labels, configName)
+			r, err := helm.New(runCtx, rCfg, labels, configName, nil)
 			if err != nil {
 				return nil, err
 			}
@@ -65,4 +66,28 @@ func GetRenderer(ctx context.Context, runCtx *runcontext.RunContext, hydrationDi
 		}
 	}
 	return renderer.NewRenderMux(gr), nil
+}
+
+// filterDuplicates removes duplicate releases defined in the legacy helm deployer
+func filterDuplicates(l *latest.LegacyHelmDeploy, h *latest.Helm) []latest.HelmRelease {
+	if l == nil {
+		return nil
+	}
+	if h == nil {
+		return l.Releases
+	}
+	var rs []latest.HelmRelease
+	for i := range l.Releases {
+		isDup := false
+		for _, r := range h.Releases {
+			if r.Name == l.Releases[i].Name {
+				isDup = true
+				break
+			}
+		}
+		if !isDup {
+			rs = append(rs, l.Releases[i])
+		}
+	}
+	return rs
 }

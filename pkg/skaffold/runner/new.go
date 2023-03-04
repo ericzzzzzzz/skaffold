@@ -20,25 +20,25 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/build"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/build/cache"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/deploy"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/deploy/label"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/deploy/util"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/event"
-	eventV2 "github.com/GoogleContainerTools/skaffold/pkg/skaffold/event/v2"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/filemon"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/graph"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/instrumentation"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/platform"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/runner/runcontext"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/latest"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/server"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/tag"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/test"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/trigger"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/verify"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/build"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/build/cache"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/deploy"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/deploy/label"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/deploy/util"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/event"
+	eventV2 "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/event/v2"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/filemon"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/graph"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/instrumentation"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/platform"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/runner/runcontext"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/latest"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/server"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/tag"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/test"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/trigger"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/verify"
 )
 
 // NewForConfig returns a new SkaffoldRunner for a SkaffoldConfig
@@ -74,7 +74,7 @@ func NewForConfig(ctx context.Context, runCtx *runcontext.RunContext) (*Skaffold
 
 	var deployer deploy.Deployer
 
-	hydrationDir, err := util.GetHydrationDir(runCtx.Opts, runCtx.WorkingDir, true)
+	hydrationDir, err := util.GetHydrationDir(runCtx.Opts, runCtx.WorkingDir, true, isKptRendererOrDeployerUsed(runCtx.Pipelines))
 
 	if err != nil {
 		return nil, fmt.Errorf("getting render output path: %w", err)
@@ -252,4 +252,22 @@ func getTester(ctx context.Context, cfg test.Config, isLocalImage func(imageName
 	}
 
 	return tester, nil
+}
+
+func isKptRendererOrDeployerUsed(pipelines runcontext.Pipelines) bool {
+	for _, configName := range pipelines.AllOrderedConfigNames() {
+		pipeline := pipelines.GetForConfigName(configName)
+		renderConfig := pipeline.Render
+		deployConfig := pipeline.Deploy
+
+		if renderConfig.Kpt != nil {
+			return true
+		}
+
+		if deployConfig.KptDeploy != nil {
+			return true
+		}
+	}
+
+	return false
 }

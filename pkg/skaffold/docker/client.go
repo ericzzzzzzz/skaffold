@@ -21,19 +21,21 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/docker/cli/cli/connhelper"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/tlsconfig"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/cluster"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/config"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/util"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/version"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/cluster"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/config"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/util"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/version"
 )
 
 // minikube 1.13.0 renumbered exit codes
@@ -92,7 +94,22 @@ func newAPIClient(ctx context.Context, kubeContext string, minikubeProfile strin
 // It will "negotiate" the highest possible API version supported by both the client
 // and the server if there is a mismatch.
 func newEnvAPIClient() ([]string, client.CommonAPIClient, error) {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithHTTPHeaders(getUserAgentHeader()))
+	var opts = []client.Opt{client.WithHTTPHeaders(getUserAgentHeader())}
+	if host := os.Getenv("DOCKER_HOST"); host != "" {
+		helper, err := connhelper.GetConnectionHelper(host)
+		if err == nil && helper != nil {
+			httpClient := &http.Client{
+				Transport: &http.Transport{
+					DialContext: helper.Dialer,
+				},
+			}
+			opts = append(opts, client.WithHTTPClient(httpClient), client.WithHost(helper.Host))
+		} else {
+			opts = append(opts, client.FromEnv)
+		}
+	}
+
+	cli, err := client.NewClientWithOpts(opts...)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error getting docker client: %s", err)
 	}

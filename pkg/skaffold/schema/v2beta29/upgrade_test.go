@@ -19,9 +19,9 @@ package v2beta29
 import (
 	"testing"
 
-	next "github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v3alpha1"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/yaml"
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	next "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/v3alpha1"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/yaml"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 func TestUpgrade(t *testing.T) {
@@ -161,7 +161,10 @@ manifests:
         chartPath: charts
 deploy:
   kubectl: {}
-  helm: {}
+  helm:
+    releases:
+    - name: skaffold-helm
+      chartPath: charts
 portForward:
   - resourceType: deployment
     resourceName: leeroy-app
@@ -261,8 +264,10 @@ manifests:
    releases:
    - name: test
 deploy:
-    helm: {}
-    kubectl: {}
+  kubectl: {}
+  helm:
+    releases:
+    - name: test
 profiles:
 - name: kustomize
   patches:
@@ -270,6 +275,8 @@ profiles:
     path: /manifests/rawYaml
   - op: remove
     path: /manifests/helm
+  - op: remove
+    path: /deploy/helm
   manifests:
     kustomize:
       paths:

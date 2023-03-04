@@ -21,12 +21,13 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"reflect"
 	"sort"
 	"strings"
 	"text/template"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output/log"
 )
 
 // For testing
@@ -34,6 +35,7 @@ var (
 	OSEnviron = os.Environ
 	funcsMap  = template.FuncMap{
 		"default": defaultFunc,
+		"cmd":     runCmdFunc,
 	}
 )
 
@@ -159,4 +161,10 @@ func defaultFunc(dflt, value interface{}) interface{} {
 		}
 	}
 	return value
+}
+
+func runCmdFunc(name string, args ...string) (string, error) {
+	cmd := exec.Command(name, args...)
+	out, err := RunCmdOut(context.TODO(), cmd)
+	return strings.TrimSpace(string(out)), err
 }

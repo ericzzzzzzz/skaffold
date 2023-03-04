@@ -23,7 +23,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	"github.com/GoogleContainerTools/skaffold/testutil"
+	"github.com/GoogleContainerTools/skaffold/v2/testutil"
 )
 
 type mockVisitor struct {
@@ -262,7 +262,7 @@ spec:
 				if expectedManifests == nil {
 					expectedManifests = test.manifests
 				}
-				t.CheckDeepEqual(expectedManifests.String(), actual.String())
+				t.CheckDeepEqual(expectedManifests.String(), actual.String(), testutil.YamlObj(t.T))
 			}
 		})
 	}

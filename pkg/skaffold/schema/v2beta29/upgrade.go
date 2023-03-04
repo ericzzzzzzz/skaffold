@@ -19,15 +19,21 @@ package v2beta29
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/util"
-	next "github.com/GoogleContainerTools/skaffold/pkg/skaffold/schema/v3alpha1"
-	pkgutil "github.com/GoogleContainerTools/skaffold/pkg/skaffold/util"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/util"
+	next "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/v3alpha1"
+	pkgutil "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/util"
 )
+
+var artifactOverridesRegexp = regexp.MustCompile("/deploy/helm/releases/[0-9]+/artifactOverrides/image")
 
 var migrations = map[string]string{
 	"/deploy/kubectl":             "/manifests/rawYaml",
@@ -44,28 +50,58 @@ func (c *SkaffoldConfig) Upgrade() (util.VersionedConfig, error) {
 	pkgutil.CloneThroughJSON(c, &newConfig)
 	newConfig.APIVersion = next.Version
 
-	err := util.UpgradePipelines(c, &newConfig, upgradeOnePipeline)
+	var nProfiles []next.Profile
+	// seed with existing Profiles
+	if c.Profiles != nil {
+		pkgutil.CloneThroughJSON(newConfig.Profiles, &nProfiles)
+	}
+
+	oldPatchesMap := map[string][]JSONPatch{}
+	newPatchesMap := map[string][]next.JSONPatch{}
+	for i, p := range c.Profiles {
+		oldPatchesMap[p.Name], newPatchesMap[p.Name] = p.Patches, nProfiles[i].Patches
+	}
+	onePipelineUpgrader := NewOnePipelineUpgrader(oldPatchesMap, newPatchesMap)
+
+	err := util.UpgradePipelines(c, &newConfig, onePipelineUpgrader.upgradeOnePipeline)
 	if err != nil {
 		return &newConfig, err
 	}
-
 	var newProfiles []next.Profile
 	// seed with existing Profiles
 	if c.Profiles != nil {
 		pkgutil.CloneThroughJSON(newConfig.Profiles, &newProfiles)
 	}
 
+	for i := range newProfiles {
+		if _, ok := newPatchesMap[newProfiles[i].Name]; ok {
+			newProfiles[i].Patches = newPatchesMap[newProfiles[i].Name]
+		}
+	}
+
 	// Update profiles patches
 	for i, p := range c.Profiles {
+		newProfiles[i].Patches = duplicateHelmPatches(newProfiles[i].Patches)
 		upgradePatches(p.Patches, newProfiles[i].Patches)
 	}
 
 	newConfig.Profiles = newProfiles
-
 	return &newConfig, nil
 }
 
-func upgradeOnePipeline(oldPipeline, newPipeline interface{}) error {
+type OnePipelineUpgrader struct {
+	oldPatchesMap map[string][]JSONPatch
+	newPatchesMap map[string][]next.JSONPatch
+}
+
+func NewOnePipelineUpgrader(oldPatchesMap map[string][]JSONPatch, newPatchesMap map[string][]next.JSONPatch) OnePipelineUpgrader {
+	return OnePipelineUpgrader{
+		oldPatchesMap: oldPatchesMap,
+		newPatchesMap: newPatchesMap,
+	}
+}
+
+func (opu *OnePipelineUpgrader) upgradeOnePipeline(oldPipeline, newPipeline interface{}) error {
 	oldPL := oldPipeline.(*Pipeline)
 	newPL := newPipeline.(*next.Pipeline)
 
@@ -118,25 +154,137 @@ func upgradeOnePipeline(oldPipeline, newPipeline interface{}) error {
 			if oldPL.Deploy.HelmDeploy.Releases[i].ImageStrategy.HelmConventionConfig != nil {
 				// is 'helm' imageStrategy
 				for k, v := range aos {
-					svs[k+".repository"] = v
-					svs[k+".tag"] = v
+					// replace commonly used image name chars that are illegal helm template chars "/" & "-" with "_"
+					validV := pkgutil.SanitizeHelmTemplateValue(v)
+					if svts == nil {
+						svts = map[string]string{}
+					}
+					svts[k+".tag"] = fmt.Sprintf("{{.IMAGE_TAG_%s}}@{{.IMAGE_DIGEST_%s}}", validV, validV)
+					svts[k+".repository"] = fmt.Sprintf("{{.IMAGE_REPO_%s}}", validV)
 					if oldPL.Deploy.HelmDeploy.Releases[i].ImageStrategy.HelmConventionConfig.ExplicitRegistry {
-						svs[k+".registry"] = v
+						// is 'helm' imageStrategy + explicitRegistry
+						svts[k+".registry"] = fmt.Sprintf("{{.IMAGE_DOMAIN_%s}}", validV)
+						svts[k+".repository"] = fmt.Sprintf("{{.IMAGE_REPO_NO_DOMAIN_%s}}", validV)
 					}
 				}
 			} else {
 				// is 'fqn' imageStrategy
 				for k, v := range aos {
-					svs[k] = v
+					if svts == nil {
+						svts = map[string]string{}
+					}
+					// replace commonly used image name chars that are illegal helm template chars "/" & "-" with "_"
+					validV := pkgutil.SanitizeHelmTemplateValue(v)
+					svts[k] = fmt.Sprintf("{{.IMAGE_FULLY_QUALIFIED_%s}}", validV)
 				}
 			}
 			newPL.Render.Helm.Releases[i].SetValues = svs
 			newPL.Render.Helm.Releases[i].SetValueTemplates = svts
 		}
 
-		// Copy over lifecyle hooks for helm deployer
+		// Duplicate helm definitions between render and deployer.
+		// This is required for backwards compatibility because skaffold v1 used helm namespace definitions for both
+		// render (to populate {{.Release.Namespace}} templates) and deploy (as `--namespace` flag)
 		newPL.Deploy.LegacyHelmDeploy = &next.LegacyHelmDeploy{}
 		newPL.Deploy.LegacyHelmDeploy.LifecycleHooks = newHelm.LifecycleHooks
+		newPL.Deploy.LegacyHelmDeploy.Releases = newHelm.Releases
+		newPL.Deploy.LegacyHelmDeploy.Flags = newHelm.Flags
+	}
+
+	err := upgradeArtifactOverridesPatches(opu.oldPatchesMap, opu.newPatchesMap, oldPL)
+	if err != nil {
+		return fmt.Errorf("error converting helm artifactOverrides during version upgrade: %w", err)
+	}
+
+	return nil
+}
+
+func upgradeArtifactOverridesPatches(oldsMap map[string][]JSONPatch, newsMap map[string][]next.JSONPatch, oldPL *Pipeline) error {
+	for k := range oldsMap {
+		for i, old := range oldsMap[k] {
+			if artifactOverridesRegexp.Match([]byte(old.Path)) {
+				idx, err := strconv.Atoi(strings.Split(old.Path, "/")[4])
+				if err != nil {
+					return err
+				}
+				newPathModified := strings.ReplaceAll(strings.ReplaceAll(old.Path, "/deploy/helm", "/manifests/helm"),
+					"artifactOverrides", "setValueTemplates")
+				if oldPL.Deploy.HelmDeploy != nil {
+					validV := pkgutil.SanitizeHelmTemplateValue(old.Value.Node.Value().(string))
+					n := &util.YamlpatchNode{}
+
+					if oldPL.Deploy.HelmDeploy.Releases[idx].ImageStrategy.HelmConventionConfig != nil {
+						err = yaml.Unmarshal([]byte(fmt.Sprintf("\"{{.IMAGE_TAG_%s}}@{{.IMAGE_DIGEST_%s}}\"", validV, validV)), n)
+						if err != nil {
+							return err
+						}
+
+						newsMap[k][i] = next.JSONPatch{
+							Op:    newsMap[k][i].Op,
+							Path:  newPathModified + ".tag",
+							From:  newsMap[k][i].From,
+							Value: n,
+						}
+
+						if oldPL.Deploy.HelmDeploy.Releases[idx].ImageStrategy.HelmConventionConfig.ExplicitRegistry {
+							// is 'helm' imageStrategy + explicitRegistry
+							n := &util.YamlpatchNode{}
+							err = yaml.Unmarshal([]byte(fmt.Sprintf("\"{{.IMAGE_DOMAIN_%s}}\"", validV)), n)
+							if err != nil {
+								return err
+							}
+
+							newsMap[k] = append(newsMap[k], next.JSONPatch{
+								Op:    newsMap[k][i].Op,
+								Path:  newPathModified + ".registry",
+								From:  newsMap[k][i].From,
+								Value: n,
+							})
+
+							n = &util.YamlpatchNode{}
+							err := yaml.Unmarshal([]byte(fmt.Sprintf("\"{{.IMAGE_REPO_NO_DOMAIN_%s}}\"", validV)), n)
+							if err != nil {
+								return err
+							}
+
+							newsMap[k] = append(newsMap[k], next.JSONPatch{
+								Op:    newsMap[k][i].Op,
+								Path:  newPathModified + ".repository",
+								From:  newsMap[k][i].From,
+								Value: n,
+							})
+						} else {
+							// is 'helm' imageStrategy
+							n = &util.YamlpatchNode{}
+							err := yaml.Unmarshal([]byte(fmt.Sprintf("\"{{.IMAGE_REPO_%s}}\"", validV)), n)
+							if err != nil {
+								return err
+							}
+
+							newsMap[k] = append(newsMap[k], next.JSONPatch{
+
+								Op:    newsMap[k][i].Op,
+								Path:  newPathModified + ".repository",
+								From:  newsMap[k][i].From,
+								Value: n,
+							})
+						}
+					} else {
+						// is 'fqn' imageStrategy
+						// replace commonly used image name chars that are illegal helm template chars "/" & "-" with "_"
+						newValue := fmt.Sprintf("\"{{.IMAGE_FULLY_QUALIFIED_%s}}\"", validV)
+
+						n := &util.YamlpatchNode{}
+						err := yaml.Unmarshal([]byte(newValue), n)
+						if err != nil {
+							return err
+						}
+						newsMap[k][i].Value = n
+						newsMap[k][i].Path = newPathModified
+					}
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -144,6 +292,10 @@ func upgradeOnePipeline(oldPipeline, newPipeline interface{}) error {
 func upgradePatches(olds []JSONPatch, news []next.JSONPatch) {
 	for i, old := range olds {
 		for str, repStr := range migrations {
+			if artifactOverridesRegexp.Match([]byte(old.Path)) {
+				// this is handled by upgradeArtifactOverridesPatches
+				continue
+			}
 			if strings.Contains(old.Path, str) {
 				news[i].Path = strings.ReplaceAll(old.Path, str, repStr)
 			}
@@ -152,4 +304,16 @@ func upgradePatches(olds []JSONPatch, news []next.JSONPatch) {
 			}
 		}
 	}
+}
+
+// duplicate the original helm profile patches to the end
+func duplicateHelmPatches(patches []next.JSONPatch) []next.JSONPatch {
+	var duplicates []next.JSONPatch
+	for i := range patches {
+		if !strings.Contains(patches[i].Path, "/deploy/helm") {
+			continue
+		}
+		duplicates = append(duplicates, patches[i])
+	}
+	return append(patches, duplicates...)
 }

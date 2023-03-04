@@ -27,9 +27,9 @@ import (
 
 	k8syaml "k8s.io/apimachinery/pkg/util/yaml"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubernetes/client"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/yaml"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/client"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/yaml"
 )
 
 type yamlObject map[string]interface{}
@@ -55,6 +55,9 @@ func HasKubernetesFileExtension(n string) bool {
 // IsKubernetesManifest is for determining if a file is a valid Kubernetes manifest
 func IsKubernetesManifest(file string) bool {
 	_, err := parseKubernetesObjects(file)
+	if err != nil {
+		log.Entry(context.TODO()).Error(err)
+	}
 	return err == nil
 }
 

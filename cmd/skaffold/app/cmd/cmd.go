@@ -23,24 +23,25 @@ import (
 	"os"
 	"strings"
 
+	"github.com/joho/godotenv"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"k8s.io/kubectl/pkg/util/templates"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/config"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/constants"
-	sErrors "github.com/GoogleContainerTools/skaffold/pkg/skaffold/errors"
-	event "github.com/GoogleContainerTools/skaffold/pkg/skaffold/event/v2"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/instrumentation"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/instrumentation/prompt"
-	kubectx "github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubernetes/context"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/runner/runcontext"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/server"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/survey"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/update"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/version"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/config"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/constants"
+	sErrors "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/errors"
+	event "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/event/v2"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/instrumentation"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/instrumentation/prompt"
+	kubectx "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/context"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/runner/runcontext"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/server"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/survey"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/update"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/version"
 )
 
 var (
@@ -208,6 +209,7 @@ func NewSkaffoldCommand(out, errOut io.Writer) *cobra.Command {
 	rootCmd.PersistentFlags().BoolVar(&timestamps, "timestamps", false, "Print timestamps in logs")
 	rootCmd.PersistentFlags().MarkHidden("force-colors")
 
+	setEnvVariablesFromFile()
 	setFlagsFromEnvVariables(rootCmd)
 
 	return rootCmd
@@ -223,6 +225,18 @@ func NewCmdOptions() *cobra.Command {
 	templates.UseOptionsTemplates(cmd)
 
 	return cmd
+}
+
+// setEnvVariablesFromFile will read the `skaffold.env` file and load them into ENV for this process.
+func setEnvVariablesFromFile() {
+	if _, err := os.Stat(constants.SkaffoldEnvFile); os.IsNotExist(err) {
+		log.Entry(context.TODO()).Debugf("Skipped loading environment variables from file %q: %s", constants.SkaffoldEnvFile, err)
+		return
+	}
+	err := godotenv.Load(constants.SkaffoldEnvFile)
+	if err != nil {
+		log.Entry(context.TODO()).Warnf("Failed to load environment variables from file %q: %s", constants.SkaffoldEnvFile, err)
+	}
 }
 
 // Each flag can also be set with an env variable whose name starts with `SKAFFOLD_`.

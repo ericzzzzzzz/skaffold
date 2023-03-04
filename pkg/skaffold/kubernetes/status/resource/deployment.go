@@ -24,15 +24,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/GoogleContainerTools/skaffold/pkg/diag"
-	"github.com/GoogleContainerTools/skaffold/pkg/diag/validator"
-	sErrors "github.com/GoogleContainerTools/skaffold/pkg/skaffold/errors"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/event"
-	eventV2 "github.com/GoogleContainerTools/skaffold/pkg/skaffold/event/v2"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/kubectl"
-	"github.com/GoogleContainerTools/skaffold/pkg/skaffold/output/log"
-	"github.com/GoogleContainerTools/skaffold/proto/v1"
-	protoV2 "github.com/GoogleContainerTools/skaffold/proto/v2"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/diag"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/diag/validator"
+	sErrors "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/errors"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/event"
+	eventV2 "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/event/v2"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubectl"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output/log"
+	"github.com/GoogleContainerTools/skaffold/v2/proto/v1"
+	protoV2 "github.com/GoogleContainerTools/skaffold/v2/proto/v2"
 )
 
 const (
@@ -51,8 +51,9 @@ type Type string
 var (
 	statefulsetRolloutSuccess = regexp.MustCompile("(roll out|rolling update) complete")
 
-	msgKubectlKilled     = "kubectl rollout status command interrupted\n"
-	MsgKubectlConnection = "kubectl connection error\n"
+	msgKubectlKilled            = "kubectl rollout status command interrupted\n"
+	MsgKubectlConnection        = "kubectl connection error\n"
+	msgStrategyTypeNotSupported = "rollout status is only available for RollingUpdate strategy type"
 
 	nonRetryContainerErrors = map[proto.StatusCode]struct{}{
 		proto.StatusCode_STATUSCHECK_IMAGE_PULL_ERR:       {},
@@ -372,6 +373,13 @@ func parseKubectlRolloutError(details string, deadline time.Duration, err error)
 		return &proto.ActionableErr{
 			ErrCode: proto.StatusCode_STATUSCHECK_KUBECTL_PID_KILLED,
 			Message: fmt.Sprintf("received Ctrl-C or deployments could not stabilize within %v: %s", deadline, msgKubectlKilled),
+		}
+	// statefulset rollouts that use OnDelete strategy type don't support monitoring rollout, treat it as
+	// if the deployment just completed successfully
+	case strings.Contains(err.Error(), msgStrategyTypeNotSupported):
+		return &proto.ActionableErr{
+			ErrCode: proto.StatusCode_STATUSCHECK_SUCCESS,
+			Message: details,
 		}
 	default:
 		return &proto.ActionableErr{
