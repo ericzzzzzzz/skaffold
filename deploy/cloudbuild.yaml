@@ -28,9 +28,9 @@ steps:
     args:
       - 'build'
       - '-t'
+      - 'us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge'
       - '--build-arg'
       - 'PROJECT_ID=$PROJECT_ID'
-      - 'us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge'
       - '-f'
       - 'deploy/skaffold/Dockerfile.binary'
       - '.'
