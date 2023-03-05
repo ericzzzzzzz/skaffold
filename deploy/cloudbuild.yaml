@@ -28,13 +28,17 @@ steps:
     - 'deploy/skaffold/Dockerfile'
     - '.'
 
-# Do the go build & push the results to GCS
-  - name: 'gcr.io/$PROJECT_ID/skaffold-builder:latest'
+  # Build and tag skaffold builder
+  - name: 'gcr.io/cloud-builders/docker'
     args:
-    - 'make'
-    - 'release-build'
-    - 'RELEASE_BUCKET=$_RELEASE_BUCKET'
-    - 'GCP_PROJECT=$PROJECT_ID'
+      - 'build'
+      - '-t'
+      - '--build-arg'
+      - 'PROJECT_ID=$PROJECT_ID'
+      - 'us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge'
+      - '-f'
+      - 'deploy/skaffold/Dockerfile.binary'
+      - '.'
 
 # Check that skaffold is in the image
   - name: 'gcr.io/$PROJECT_ID/skaffold:edge'
@@ -46,6 +50,7 @@ images:
 - 'gcr.io/$PROJECT_ID/build_deps:latest'
 - 'gcr.io/$PROJECT_ID/skaffold:edge'
 - 'gcr.io/$PROJECT_ID/skaffold:$COMMIT_SHA'
+- 'us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge'
 
 options:
   machineType: 'N1_HIGHCPU_8'
