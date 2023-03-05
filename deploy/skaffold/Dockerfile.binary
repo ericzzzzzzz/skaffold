@@ -1,4 +1,5 @@
-FROM gcr.io/eric-skaffold/skaffold-builder:latest as builder
+ARG PROJECT_ID
+FROM gcr.io/$PROJECT_ID/skaffold-builder:latest as builder
 
 FROM gcr.io/distroless/static-debian11
 COPY --from=builder /usr/bin/skaffold /usr/bin/skaffold
