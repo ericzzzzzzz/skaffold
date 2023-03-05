@@ -13,11 +13,6 @@ steps:
     - 'deploy/skaffold/Dockerfile.deps'
     - '.'
 
-# Grab secret credentials from gcp bucket
-  - name: gcr.io/cloud-builders/gcloud
-    entrypoint: 'bash'
-    args: ['deploy/setup-secret.sh','-p', $PROJECT_ID]
-
 # Build and tag skaffold builder
   - name: 'gcr.io/cloud-builders/docker'
     args:
@@ -47,9 +42,6 @@ steps:
     - 'version'
 
 images:
-- 'gcr.io/$PROJECT_ID/build_deps:latest'
-- 'gcr.io/$PROJECT_ID/skaffold:edge'
-- 'gcr.io/$PROJECT_ID/skaffold:$COMMIT_SHA'
 - 'us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge'
 
 options:
