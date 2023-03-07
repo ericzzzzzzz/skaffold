@@ -13,7 +13,14 @@ steps:
     - 'deploy/skaffold/Dockerfile.deps'
     - '.'
 
-# Build and tag skaffold builder
+  - name: 'gcr.io/cloud-builders/docker'
+    entrypoint: bin/bash
+    args:
+      - -c
+      - |
+        echo $_IMAGE_TAG
+
+    # Build and tag skaffold builder
   - name: 'gcr.io/cloud-builders/docker'
     args:
     - 'build'
@@ -23,7 +30,7 @@ steps:
     - 'deploy/skaffold/Dockerfile'
     - '.'
 
-  # Build and tag skaffold builder
+  # Build and tag skaffold binary
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
