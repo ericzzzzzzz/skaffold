@@ -17,22 +17,15 @@
 
 set -xeo pipefail
 # Variables that will be substituted in cloudbuild.yaml.
-if [ -z "$PROJECT_ID" ]; then
-  PROJECT_ID=k8s-skaffold
-fi
-if [ -z "$_IMAGE" ]; then
-  _IMAGE="skaffold"
-fi
 if [ -z "$_TAG_FILTER" ]; then
-  _TAG_FILTER="v.*lts"
+  _TAG_FILTER="v.*lts|edge"
 fi
-if [ -z "$_SEVERITIES" ]; then
-  _SEVERITIES="HIGH CRITICAL"
+# us-east1-docker.pkg.dev/ericz-skaffold/eric-testing/skaffold
+if [ -z "$_BASE_IMAGE" ] ; then
+  _BASE_IMAGE="gcr.io/k8s-skaffold/skaffold"
 fi
-
 # If changed, also change the same variable in report.sh.
-OS_VULN_FILE=/workspace/os_vuln.txt
-BASE_IMAGE="gcr.io/$PROJECT_ID/$_IMAGE"
+OS_VULN_FILE=os_vuln.txt
 
 append() {
   printf "%s\n" $1 >>$2
@@ -41,28 +34,27 @@ append() {
 check_vulnerability(){
   base_image=$1
   tags_filter=$2
-  severities=$3
-  result_file=$4
-  tags=$5
+  result_file=$3
+  tags=$4
 
   if [ -z "$tags" ]; then
-    tags=$(gcloud container images list-tags "$base_image" --filter="tags~$tags_filter" --format='value(tags)')
+    tags=$(gcloud container images list-tags "$base_image" --filter="timestamp.datetime > -P1Y AND tags~$tags_filter" --format='value(tags)' | sort -nr | awk -F'[:.]' '$1$2!=p&&p=$1$2')
   fi
-  grep_args=""
-  for s in $severities; do
-    grep_args="$grep_args -e $s"
-  done
-  grep_cmd="grep $grep_args"
 
   for tagsByComma in $tags; do
     IFS="," read -ra tagArr <<< "${tagsByComma}"
     image=$base_image:${tagArr[0]}
-    echo "Checking vulnerabilities of image:" $image
-    gcloud beta container images describe $image  --show-package-vulnerability \
-     | if eval "$grep_cmd"; then append "$base_image":"$tagsByComma" "$result_file"; fi
+    echo "Checking vulnerabilities of image:" "$image"
+    gcloud beta container images describe "$image"  --show-package-vulnerability \
+     | if grep -e "effectiveSeverity: HIGH" -e "effectiveSeverity: CRITICAL";
+       then
+         append "$base_image:$tagsByComma:true" "$result_file";
+       else
+         append "$base_image:$tagsByComma:false" "$result_file"
+       fi
   done
 }
 
 # Main
 # Scans the LTS images
-check_vulnerability $BASE_IMAGE "$_TAG_FILTER" "$_SEVERITIES" "$OS_VULN_FILE" "$_TAGS"
+check_vulnerability $_BASE_IMAGE "$_TAG_FILTER"  "$OS_VULN_FILE" "$_TAGS"

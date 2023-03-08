@@ -1,0 +1,4 @@
+gcr.io/k8s-skaffold/skaffold:v2.0.6-lts:false
+gcr.io/k8s-skaffold/skaffold:v1.39.6-lts:false
+gcr.io/k8s-skaffold/skaffold:v1.37.3-lts:false
+gcr.io/k8s-skaffold/skaffold:edge,fa1f90a70ec484096f6dadf837e6d6b245a7b559:false

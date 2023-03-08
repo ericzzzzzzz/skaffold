@@ -10,4 +10,4 @@ steps:
     args:
       - -c
       - |
-        gcloud pubsub topics publish scanning --message="hello" --attribute="origin=gcloud-sample,username=gcp,tag=v3.10.3"
+        gcloud pubsub topics publish scanning --message='{"tag": "v3.10.3"}' --attribute="tag=v3.10.3"
