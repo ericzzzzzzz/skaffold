@@ -4,10 +4,6 @@ steps:
     args:
       - -c
       - |
-        docker build -t us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge --build-arg PROJECT_ID=$PROJECT_ID -f deploy/skaffold/Dockerfile.test . && docker push us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge
-  - name: gcr.io/cloud-builders/gcloud
-    entrypoint: /bin/bash
-    args:
-      - -c
-      - |
-        gcloud pubsub topics publish scanning --message='{"tag": "v3.10.3"}' --attribute="tag=v3.10.3"
+        docker build -t us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge --build-arg PROJECT_ID=$PROJECT_ID -f deploy/skaffold/Dockerfile.test .
+images:
+  - 'us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge'

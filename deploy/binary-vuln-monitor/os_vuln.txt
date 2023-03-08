@@ -2,3 +2,4 @@ gcr.io/k8s-skaffold/skaffold:v2.0.6-lts:false
 gcr.io/k8s-skaffold/skaffold:v1.39.6-lts:false
 gcr.io/k8s-skaffold/skaffold:v1.37.3-lts:false
 gcr.io/k8s-skaffold/skaffold:edge:false
+gcr.io/k8s-skaffold/skaffold:us-east1-docker.pkg.dev/ericz-skaffold/eric-testing/scanning:v2.0.10:false
