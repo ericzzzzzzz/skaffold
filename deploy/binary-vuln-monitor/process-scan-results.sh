@@ -27,14 +27,20 @@ TITLE_OS="LTS image has OS vulnerability!"
 OS_VULN_FILE=os_vuln.txt
 IMAGES_TO_REPORT_FILE=/workspace/images_to_report.txt
 
+find_issue() {
+  label=$1
+  issue=$(gh issue list --label "$label" --repo="$_REPO" --json number,title)
+  echo "$issue"
+}
+
 while IFS= read -r line; do
     echo "Text read from file: $line"
-    image_tag=$(echo "$line" | awk awk -F '[:]' '{print $2}')
-    vulnerable=$(echo "$line" | awk awk -F '[:]' '{print $3}')
+    image_tag=$(echo "$line" | awk -F '[:]' '{print $2}')
+    vulnerable=$(echo "$line" | awk -F '[:]' '{print $3}')
     label="bin-vul-${image_tag%.*}"
     title="skaffold vulnerabilities found in $image_tag binary"
     issue=$(find_issue "$label")
-    if [ -z "$issue" ]; then
+    if [ '[]' == "$issue" ]; then
       if [ "$vulnerable" == "true" ]; then
         echo "creating new issue"
       fi
@@ -51,28 +57,12 @@ while IFS= read -r line; do
       fi
     fi
 
-    # This should always close previous one if exist for lts
-
-    if [ "$issue_num" -eq "-1" ]; then
-      echo "Creating an issue..."
-      create_issue "$TITLE_OS" "$IMAGES_TO_REPORT_FILE" "$_OS_VULN_LABEL"
-    else
-      echo "Updating issue: #""$issue_num"
-      # check create time, alerting every two weeks?
-      update_issue "$issue_num" "$IMAGES_TO_REPORT_FILE"
-    fi
-
 done < os_vuln.txt
 
 append() {
   echo -e $1 >> $2
 }
 
-find_issue() {
-  label=$1
-  issue=$(gh issue list --label "$label" --repo="$_REPO" --json number,title)
-  echo "$issue"
-}
 #
 #check_existing_issue() {
 #  query=$1
@@ -95,14 +85,15 @@ find_issue() {
 #}
 #
 
-create_issue() {
-  title="$1"
-  body_file="$2"
-  label="$3"
-  # label with minor version bin-vul-v2.0, bin-vul-v1.37
-  gh label create label -c "1D76DB" -d "Skaffold binary has vulnerabilities." --force
-  gh issue create --title="${title}" --label="${label}" --body-file="$body_file" --repo="$_REPO"
-}
+#
+#create_issue() {
+#  title="$1"
+#  body_file="$2"
+#  label="$3"
+#  # label with minor version bin-vul-v2.0, bin-vul-v1.37
+#  gh label create label -c "1D76DB" -d "Skaffold binary has vulnerabilities." --force
+#  gh issue create --title="${title}" --label="${label}" --body-file="$body_file" --repo="$_REPO"
+#}
 #
 #update_issue() {
 #  num="$1"
