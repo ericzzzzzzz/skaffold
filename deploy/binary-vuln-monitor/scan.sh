@@ -36,9 +36,16 @@ check_vulnerability(){
   tags_filter=$2
   result_file=$3
   tags=$4
+  tags_filter=""
 
   if [ -z "$tags" ]; then
-    tags=$(gcloud container images list-tags "$base_image" --filter="timestamp.datetime > -P1Y AND tags~$tags_filter" --format='value(tags)' | sort -nr | awk -F'[:.]' '$1$2!=p&&p=$1$2')
+    targeted_base_tags="$(gcloud container images list-tags "$base_image" --filter="timestamp.datetime > -P1Y AND tags~v*\.1-lts" --format='value(tags)')"
+    for line in $targeted_base_tags; do
+      IFS=',' read -ra t <<< "${line}"
+      tags_filter+="${t[0]/.1-lts/.*-lts}|"
+    done
+    tags_filter+="edge"
+    tags=$(gcloud container images list-tags "$base_image" --filter="tags~$tags_filter" --format='value(tags)' | sort -nr | awk -F'[:.]' '$1$2!=p&&p=$1$2')
   fi
 
   for tagsByComma in $tags; do
