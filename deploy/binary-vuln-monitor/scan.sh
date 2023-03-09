@@ -22,7 +22,7 @@ if [ -z "$_TAG_FILTER" ]; then
 fi
 # us-east1-docker.pkg.dev/ericz-skaffold/eric-testing/skaffold
 if [ -z "$_BASE_IMAGE" ] ; then
-  _BASE_IMAGE="gcr.io/k8s-skaffold/skaffold"
+  _BASE_IMAGE="us-east1-docker.pkg.dev/k8s-skaffold/scanning/skaffold"
 fi
 # If changed, also change the same variable in report.sh.
 OS_VULN_FILE=os_vuln.txt
@@ -33,12 +33,12 @@ append() {
 
 check_vulnerability(){
   base_image=$1
-  tags_filter=$2
-  result_file=$3
-  tags=$4
+  result_file=$2
+  tags=$3
   tags_filter=""
 
   if [ -z "$tags" ]; then
+    # We should only scan lts images within 1 year window from the first patch of the release.
     targeted_base_tags="$(gcloud container images list-tags "$base_image" --filter="timestamp.datetime > -P1Y AND tags~v.*\.1-lts" --format='value(tags)')"
     for line in $targeted_base_tags; do
       IFS=',' read -ra t <<< "${line}"
@@ -48,7 +48,7 @@ check_vulnerability(){
     done
     tags_filter+="^edge$"
     # get the latest patches tags for lts images. gcloud will return extra tags if an image has multiple tags and we only want tags specified in the filter, so use grep to further filter the result.
-    tags=$(gcloud container images list-tags "$base_image" --filter="tags~$tags_filter" --format='value(tags)' | sort -nr | awk -F'[:.]' '$1$2!=p&&p=$1$2' | grep -Po "$tags_filter|edge")
+    tags=$(gcloud container images list-tags "$base_image" --filter="tags~$tags_filter" --format='value(tags)' | sort -nr | awk -F'[:.]' '$1$2!=p&&p=$1$2' | ggrep -Po "$tags_filter|edge")
   fi
 
   for tagsByComma in $tags; do
@@ -67,4 +67,4 @@ check_vulnerability(){
 
 # Main
 # Scans the LTS images
-check_vulnerability $_BASE_IMAGE "$_TAG_FILTER"  "$OS_VULN_FILE" "$_TAGS"
+check_vulnerability $_BASE_IMAGE "$OS_VULN_FILE" "$_TAGS"
