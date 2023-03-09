@@ -4,6 +4,6 @@ steps:
     args:
       - -c
       - |
-        docker build -t us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge --build-arg PROJECT_ID=$PROJECT_ID -f deploy/skaffold/Dockerfile.test .
+        docker build -t us-east1-docker.pkg.dev/k8s-skaffold/scanning/skaffold:v1.37.3-lts --build-arg PROJECT_ID=$PROJECT_ID -f deploy/skaffold/Dockerfile.test .
 images:
-  - 'us-east1-docker.pkg.dev/$PROJECT_ID/eric-testing/skaffold:edge'
+  - 'us-east1-docker.pkg.dev/k8s-skaffold/scanning/skaffold:v1.37.3-lts'

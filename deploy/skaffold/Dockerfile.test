@@ -1,6 +1,6 @@
 FROM alpine/curl as builder
 
-RUN curl -Lo skaffold https://storage.googleapis.com/skaffold/v2.0.6/latest/skaffold-linux-amd64 && chmod +x skaffold
+RUN curl -Lo skaffold https://storage.googleapis.com/skaffold/releases/v1.37.3/skaffold-linux-amd64 && chmod +x skaffold
 
 FROM gcr.io/distroless/static-debian11
 

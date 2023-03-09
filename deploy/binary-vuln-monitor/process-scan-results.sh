@@ -20,12 +20,16 @@ set -xeo pipefail
 
 
 if [ -z "$_REPO" ]; then
-  _REPO="GoogleContainerTools/skaffold"
+  _REPO="https://github.com/ericzzzzzzz/kokoro-codelab-ericwork"
 fi
 
 TITLE_OS="LTS image has OS vulnerability!"
 OS_VULN_FILE=os_vuln.txt
-IMAGES_TO_REPORT_FILE=/workspace/images_to_report.txt
+IMAGES_TO_REPORT_FILE=os_vuln.txt
+
+append() {
+  echo -e $1 >> $2
+}
 
 find_issue() {
   label=$1
@@ -33,82 +37,74 @@ find_issue() {
   echo "$issue"
 }
 
-while IFS= read -r line; do
-    echo "Text read from file: $line"
-    image_tag=$(echo "$line" | awk -F '[:]' '{print $2}')
-    vulnerable=$(echo "$line" | awk -F '[:]' '{print $3}')
-    label="bin-vul-${image_tag%.*}"
-    title="skaffold vulnerabilities found in $image_tag binary"
-    issue=$(find_issue "$label")
-    if [ '[]' == "$issue" ]; then
-      if [ "$vulnerable" == "true" ]; then
-        echo "creating new issue"
-      fi
-    else
-      issue_title=$(echo "$issue" | ggrep -oP '"title": *\K"[^"]*"' | head -n 1)
-      issue_num=$(echo "$issue" | ggrep -oP 'number":\s*\K\d+' | head -n 1)
-      if [ "$issue_title" != "$title" ]; then
-        echo "Closing as $issue_num, $image_tag, $vulnerable"
-        if [ "$vulnerable" == "true" ]; then
-          echo "Creating...."
-        fi
-      else
-        echo "Checking date and reminding again"
-      fi
-    fi
-
-done < os_vuln.txt
-
-append() {
-  echo -e $1 >> $2
+create_issue() {
+  title=$1
+  label=$2
+  gh label create --repo="$_REPO" "$label" -c "1D76DB" -d "skaffold binary has vulnerabilities" --force
+  gh issue create --repo="$_REPO" --title="$title" --label="$label" --body="message--"
 }
 
-#
-#check_existing_issue() {
-#  query=$1
-#  label=$2
-#  # Returns the open issues. There should be only one issue opened at a time.
-#  issue_num=$(gh issue list --search "$query" --label "$label" --repo="$_REPO" --json number | ggrep -oP 'number":\s*\K\d+' | head -n 1)
-#
-#  if [ "$issue_num" ]; then
-#    echo >&2 "There is already an issue opened for the detected vulnerabilities in the LTS images." && echo "$issue_num"
-#  else
-#    echo "-1"
-#  fi
-#}
+close_issue_as_fixed() {
+   issue_num=$1
+   tag=$2
+   gh issue close "$issue_num" --repo="$_REPO" -c "Closing as the issue is fixed in $tag"
+}
 
-#
-#init_body_file(){
-# append "Please patch the below images with instructions mentioned [here](https://docs.google.com/document/d/1gYJVoBCZiRzUTQs_-wKsfhHdskiMtJtWWQyI-t0mhC8/edit?resourcekey=0-NdLapTumfpzxH_bri0fLZQ#heading=h.p4mphzyz8m7y).\n" "$IMAGES_TO_REPORT_FILE"
-#
-#
-#}
-#
+close_issue_tracked_in_another() {
+   issue_num=$1
+   new_issue_url=$2
+   gh issue close "$issue_num" --repo="$_REPO" -c "Closing as the issue is tracked in $new_issue_url"
+}
 
-#
-#create_issue() {
-#  title="$1"
-#  body_file="$2"
-#  label="$3"
-#  # label with minor version bin-vul-v2.0, bin-vul-v1.37
-#  gh label create label -c "1D76DB" -d "Skaffold binary has vulnerabilities." --force
-#  gh issue create --title="${title}" --label="${label}" --body-file="$body_file" --repo="$_REPO"
-#}
-#
-#update_issue() {
-#  num="$1"
-#  body_file="$2"
-#  gh issue edit "$num" --body-file="$body_file" --repo="$_REPO"
-#}
-#
-#gh auth login --with-token <token.txt
-#issue_num=$(check_existing_issue "$_OS_VULN_LABEL")
-#
-#init_body_file
-#if [ "$issue_num" -eq "-1" ]; then
-#  echo "Creating an issue..."
-#  create_issue "$TITLE_OS" "$IMAGES_TO_REPORT_FILE" "$_OS_VULN_LABEL"
-#else
-#  echo "Updating issue: #""$issue_num"
-#  update_issue "$issue_num" "$IMAGES_TO_REPORT_FILE"
-#fi
+process_report_without_existing_issue() {
+  title=$1
+  label=$2
+  vulnerable=$3
+  if [ "$vulnerable" == "true" ]; then
+    echo "creating new issue title: $title, label: $label"
+    new_issue_url=$(create_issue "$title" "$label")
+  fi
+}
+
+process_report_with_existing_issue() {
+   issue=$1
+   title=$2
+   label=$3
+   vulnerable=$4
+   image_tag=$5
+
+   issue_title=$(echo "$issue" | ggrep -oP '"title": *\K"[^"]*"' | head -n 1)
+   issue_num=$(echo "$issue" | ggrep -oP 'number":\s*\K\d+' | head -n 1)
+    # we have a new version different from the vulnerable one mentioned in the issue.
+    if [ "$issue_title" != "$title" ]; then
+      if [ "$vulnerable" == "true" ]; then
+        new_issue_url=$(create_issue "$title" "$label")
+        close_issue_tracked_in_another "$issue_num" "$new_issue_url"
+        echo "Closing as to be tracked in the new issue. $issue_num, $tag, $vulnerable, $new_issue_url"
+      else
+        close_issue_as_fixed "$issue_num" "$image_tag"
+      fi
+    else
+      # This can edge binary, as we always use the same issue that for that. Also, it is possible to occur for two attempts scanning get different results if
+      # scanner database gets updated, e.g. fix false positives
+      if [ "$vulnerable" == "false" ]; then
+        close_issue_as_fixed "$issue_num" "$image_tag"
+      fi
+    fi
+}
+
+while IFS= read -r line; do
+    echo "Text read from file: $line"
+    tag=$(echo "$line" | awk -F '[:]' '{print $2}')
+    image_tag=$(echo "$line" | awk -F '[:]' '{print $1":"$2}')
+    vulnerable=$(echo "$line" | awk -F '[:]' '{print $3}')
+    label="bin-vul-${tag%.*}"
+    title="skaffold vulnerabilities found in $tag binary"
+    issue=$(find_issue "$label")
+    if [ '[]' == "$issue" ]; then
+      process_report_without_existing_issue "$title" "$label" "$vulnerable"
+    else
+      process_report_without_existing_issue "$issue" "$title" "$label" "$vulnerable" "$image_tag"
+    fi
+done < os_vuln.txt
+
