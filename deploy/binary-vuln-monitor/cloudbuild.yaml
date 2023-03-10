@@ -22,10 +22,3 @@ steps:
   env:
   - '_OS_VULN_LABEL=$_OS_VULN_LABEL'
   - '_REPO=$_REPO'
-substitutions:
-  _IMAGE: skaffold
-  _TAG_FILTER: v.*lts
-  _SEVERITIES: HIGH CRITICAL
-  _OS_VULN_LABEL: lts os vuln
-  _REPO: GoogleContainerTools/skaffold
-  _GITHUB_TOKEN: LTS_IMAGE_CD_BOT_GITHUB_TOKEN
