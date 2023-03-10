@@ -1,4 +1,4 @@
-us-east1-docker.pkg.dev/k8s-skaffold/scanning/skaffold:v2.0.7-lts:false
-us-east1-docker.pkg.dev/k8s-skaffold/scanning/skaffold:v1.39.7-lts:false
-us-east1-docker.pkg.dev/k8s-skaffold/scanning/skaffold:v1.37.3-lts:false
+us-east1-docker.pkg.dev/k8s-skaffold/scanning/skaffold:v2.0.7-lts:true
+us-east1-docker.pkg.dev/k8s-skaffold/scanning/skaffold:v1.39.6-lts:false
+us-east1-docker.pkg.dev/k8s-skaffold/scanning/skaffold:v1.37.4-lts:false
 us-east1-docker.pkg.dev/k8s-skaffold/scanning/skaffold:edge:false

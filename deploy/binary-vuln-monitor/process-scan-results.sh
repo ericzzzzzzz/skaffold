@@ -23,7 +23,6 @@ if [ -z "$_REPO" ]; then
   _REPO="https://github.com/ericzzzzzzz/kokoro-codelab-ericwork"
 fi
 
-TITLE_OS="LTS image has OS vulnerability!"
 OS_VULN_FILE=os_vuln.txt
 IMAGES_TO_REPORT_FILE=os_vuln.txt
 
@@ -40,8 +39,13 @@ find_issue() {
 create_issue() {
   title=$1
   label=$2
+  image_tag=$3
+  body="Vulnerabilities were found in skaffold binary, please fix the issues.
+        Please make a patch release if the issues are in lts release.
+        Vulnerabilities details: see [here]($image_tag)."
+
   gh label create --repo="$_REPO" "$label" -c "1D76DB" -d "skaffold binary has vulnerabilities" --force
-  gh issue create --repo="$_REPO" --title="$title" --label="$label" --body="message--"
+  gh issue create --repo="$_REPO" --title="$title" --label="$label" --body="$body"
 }
 
 close_issue_as_fixed() {
@@ -60,9 +64,9 @@ process_report_without_existing_issue() {
   title=$1
   label=$2
   vulnerable=$3
+  image_tag=$4
   if [ "$vulnerable" == "true" ]; then
-    echo "creating new issue title: $title, label: $label"
-    new_issue_url=$(create_issue "$title" "$label")
+    new_issue_url=$(create_issue "$title" "$label" "$image_tag")
   fi
 }
 
@@ -75,22 +79,13 @@ process_report_with_existing_issue() {
 
    issue_title=$(echo "$issue" | ggrep -oP '"title": *\K"[^"]*"' | head -n 1)
    issue_num=$(echo "$issue" | ggrep -oP 'number":\s*\K\d+' | head -n 1)
-    # we have a new version different from the vulnerable one mentioned in the issue.
-    if [ "$issue_title" != "$title" ]; then
-      if [ "$vulnerable" == "true" ]; then
-        new_issue_url=$(create_issue "$title" "$label")
-        close_issue_tracked_in_another "$issue_num" "$new_issue_url"
-        echo "Closing as to be tracked in the new issue. $issue_num, $tag, $vulnerable, $new_issue_url"
-      else
-        close_issue_as_fixed "$issue_num" "$image_tag"
-      fi
-    else
-      # This can edge binary, as we always use the same issue that for that. Also, it is possible to occur for two attempts scanning get different results if
-      # scanner database gets updated, e.g. fix false positives
-      if [ "$vulnerable" == "false" ]; then
-        close_issue_as_fixed "$issue_num" "$image_tag"
-      fi
-    fi
+
+   if [ "$vulnerable" == "false" ]; then
+      close_issue_as_fixed "$issue_num" "$image_tag"
+   elif [ "$issue_title" != "$title" ]; then
+      new_issue_url=$(create_issue "$title" "$label" "$image_tag")
+      close_issue_tracked_in_another "$issue_num" "$new_issue_url"
+   fi
 }
 
 while IFS= read -r line; do
@@ -102,9 +97,9 @@ while IFS= read -r line; do
     title="skaffold vulnerabilities found in $tag binary"
     issue=$(find_issue "$label")
     if [ '[]' == "$issue" ]; then
-      process_report_without_existing_issue "$title" "$label" "$vulnerable"
+      process_report_without_existing_issue "$title" "$label" "$vulnerable" "$image_tag"
     else
-      process_report_without_existing_issue "$issue" "$title" "$label" "$vulnerable" "$image_tag"
+      process_report_with_existing_issue "$issue" "$title" "$label" "$vulnerable" "$image_tag"
     fi
 done < os_vuln.txt
 
