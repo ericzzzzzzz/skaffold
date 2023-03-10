@@ -40,9 +40,10 @@ create_issue() {
   title=$1
   label=$2
   image_tag=$3
-  body="Vulnerabilities were found in skaffold binary, please fix the issues.
+  body="@GoogleContainerTools/skaffold-team
+        Vulnerabilities were found in skaffold binary, please fix the issues.
         Please make a patch release if the issues are in lts release.
-        Vulnerabilities details: see [here]($image_tag)."
+        Vulnerabilities details: see [here](https://$image_tag)."
 
   gh label create --repo="$_REPO" "$label" -c "1D76DB" -d "skaffold binary has vulnerabilities" --force
   gh issue create --repo="$_REPO" --title="$title" --label="$label" --body="$body"
