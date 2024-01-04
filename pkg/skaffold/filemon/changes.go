@@ -18,7 +18,9 @@ package filemon
 
 import (
 	"context"
+	"crypto/md5"
 	"fmt"
+	"io"
 	"os"
 	"sort"
 	"strings"
@@ -29,6 +31,9 @@ import (
 
 // FileMap is a map of filename to modification times.
 type FileMap map[string]time.Time
+
+// local filepath hash
+var SyncedHash map[string]string = map[string]string{}
 
 // Stat returns the modification times for a list of files.
 func Stat(deps func() ([]string, error)) (FileMap, error) {
@@ -50,6 +55,24 @@ func Stat(deps func() ([]string, error)) (FileMap, error) {
 	}
 
 	return state, nil
+}
+
+func HashFile(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	hash := md5.New()
+
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	hashSum := hash.Sum(nil)
+
+	return fmt.Sprintf("%x", hashSum), nil
 }
 
 type Events struct {
@@ -90,6 +113,13 @@ func events(prev, curr FileMap) Events {
 		if !modtime.Equal(t) {
 			// file in both prev and curr
 			// time not equal -> file modified
+			currH, err := HashFile(f)
+			if h, ok := SyncedHash[f]; ok {
+				if err != nil || h == currH {
+					continue
+				}
+			}
+			SyncedHash[f] = currH
 			e.Modified = append(e.Modified, f)
 			continue
 		}
@@ -100,6 +130,14 @@ func events(prev, curr FileMap) Events {
 		// covered above
 		_, ok := prev[f]
 		if !ok {
+			currH, err := HashFile(f)
+			if h, ok := SyncedHash[f]; ok {
+				if err != nil || h == currH {
+					continue
+				}
+			} else {
+				SyncedHash[f] = currH
+			}
 			// file in curr but not in prev -> file added
 			e.Added = append(e.Added, f)
 		}

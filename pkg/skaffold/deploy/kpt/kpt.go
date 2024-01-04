@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/download"
 	"io"
 	"os"
 	"os/exec"
@@ -84,6 +85,11 @@ type Deployer struct {
 	kubeConfig         string
 	namespace          string
 	namespaces         *[]string
+}
+
+func (k *Deployer) GetDownloader() download.Downloader {
+	//TODO implement me
+	panic("implement me")
 }
 
 type Config interface {

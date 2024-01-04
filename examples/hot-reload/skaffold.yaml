@@ -25,6 +25,10 @@ profiles:
           # with the container src folder
           - src: 'src/**/*.js'
             dest: .
+        download:
+          entry:
+            - src: "src"
+              dst: "node/abc"
       - image: python-reload
         context: python
         docker:

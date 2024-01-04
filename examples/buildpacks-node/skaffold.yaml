@@ -4,3 +4,7 @@ build:
   artifacts:
   - image: skaffold-buildpacks-node
     buildpacks: {}
+    download:
+      entry:
+        - src: "."
+          dst: "."

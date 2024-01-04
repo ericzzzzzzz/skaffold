@@ -44,8 +44,8 @@ import (
 )
 
 var (
-	decodeFromYaml = scheme.Codecs.UniversalDeserializer().Decode
-	encodeAsYaml   = func(o runtime.Object) ([]byte, error) {
+	DecodeFromYaml = scheme.Codecs.UniversalDeserializer().Decode
+	EncodeAsYaml   = func(o runtime.Object) ([]byte, error) {
 		s := k8sjson.NewYAMLSerializer(k8sjson.DefaultMetaFactory, scheme.Scheme, scheme.Scheme)
 		var b bytes.Buffer
 		w := bufio.NewWriter(&b)
@@ -93,11 +93,11 @@ func Describe(obj runtime.Object) (group, version, kind, description string) {
 func applyDebuggingTransforms(l manifest.ManifestList, retriever debug.ConfigurationRetriever, debugHelpersRegistry string) (manifest.ManifestList, error) {
 	var updated manifest.ManifestList
 	for _, manifest := range l {
-		obj, _, err := decodeFromYaml(manifest, nil, nil)
+		obj, _, err := DecodeFromYaml(manifest, nil, nil)
 		if err != nil {
 			log.Entry(context.Background()).Debugf("Unable to interpret manifest for debugging: %v\n", err)
 		} else if transformManifest(obj, retriever, debugHelpersRegistry) {
-			manifest, err = encodeAsYaml(obj)
+			manifest, err = EncodeAsYaml(obj)
 			if err != nil {
 				return nil, fmt.Errorf("marshalling yaml: %w", err)
 			}

@@ -136,6 +136,7 @@ See https://skaffold.dev/docs/pipeline-stages/taggers/#how-tagging-works`)
 			return err
 		}
 	}
+
 	eventV2.TaskSucceeded(constants.Deploy)
 	return nil
 }
