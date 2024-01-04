@@ -18,7 +18,6 @@ package latest
 
 import (
 	"encoding/json"
-
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 
@@ -814,6 +813,8 @@ type KptDeploy struct {
 
 	// DefaultNamespace is the default namespace passed to kpt on deployment if no other override is given.
 	DefaultNamespace *string `yaml:"defaultNamespace,omitempty"`
+
+	DownstreamSync *DownstreamSync `yaml:"downstreamSync,omitempty"`
 }
 
 // DeployConfig contains all the configuration needed by the deploy steps.
@@ -1735,6 +1736,20 @@ type ResourceFilter struct {
 	Labels []string `yaml:"labels,omitempty"`
 	// PodSpec is an optional slice of JSON-path-like paths of where pod spec properties can be overwritten.
 	PodSpec []string `yaml:"podSpec,omitempty"`
+}
+
+type DownstreamSyncTarget struct {
+	volume string `yaml:"volume" yamltags:"required"`
+}
+
+type DownstreamSyncEntry struct {
+	src      string   `yaml:"src" yamltags:"required"`
+	dst      string   `yaml:"dst" yamltags:"required"`
+	excludes []string `yaml:"excludes,omitempty"`
+}
+
+type DownstreamSync struct {
+	targets []DownstreamSyncTarget `yaml:"targets,omitempty"`
 }
 
 // UnmarshalYAML provides a custom unmarshaller to deal with

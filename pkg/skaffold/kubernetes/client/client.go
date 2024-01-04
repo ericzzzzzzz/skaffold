@@ -18,7 +18,6 @@ package client
 
 import (
 	"fmt"
-
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth" // Initialize all known client auth plugins

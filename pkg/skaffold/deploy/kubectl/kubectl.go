@@ -19,7 +19,9 @@ package kubectl
 import (
 	"context"
 	"fmt"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/debugging"
 	"io"
+	corev1 "k8s.io/api/core/v1"
 	"os/exec"
 	"strings"
 
@@ -239,6 +241,14 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 	}
 	if manifests, err = manifest.ApplyTransforms(manifests, builds, k.insecureRegistries, debugHelpersRegistry); err != nil {
 		return err
+	}
+	for _, m := range manifests {
+		runtimeObj, _, _ := debugging.DecodeFromYaml(m, nil, nil)
+
+		pod, ok := runtimeObj.(*corev1.Pod)
+		if ok {
+			pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{Name: "downloader", Image: ""})
+		}
 	}
 
 	childCtx, endTrace = instrumentation.StartTrace(ctx, "Deploy_LoadImages")
