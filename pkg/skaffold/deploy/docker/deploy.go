@@ -19,6 +19,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/download"
 	"io"
 	"regexp"
 	"strings"
@@ -75,6 +76,11 @@ type Deployer struct {
 	resources          []*latest.PortForwardResource
 	once               sync.Once
 	labeller           *label.DefaultLabeller
+}
+
+func (d *Deployer) GetDownloader() download.Downloader {
+	//TODO implement me
+	panic("implement me")
 }
 
 func NewDeployer(ctx context.Context, cfg dockerutil.Config, labeller *label.DefaultLabeller, d *latest.DockerDeploy, resources []*latest.PortForwardResource, configName string) (*Deployer, error) {

@@ -3,6 +3,10 @@ kind: Config
 build:
   artifacts:
   - image: skaffold-example
+    download:
+      entry:
+        - remoteSrc: "."
+          localDst: "."
 manifests:
   rawYaml:
   - k8s-pod.yaml

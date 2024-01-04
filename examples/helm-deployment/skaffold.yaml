@@ -3,6 +3,10 @@ kind: Config
 build:
   artifacts:
   - image: skaffold-helm
+    download:
+      entry:
+        - remoteSrc: "."
+          localDst: "."
 deploy:
   helm:
     releases:

@@ -19,13 +19,13 @@ package kubectl
 import (
 	"context"
 	"fmt"
-	"io"
-	"os/exec"
-	"strings"
-
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/download"
 	"github.com/segmentio/textio"
 	"go.opentelemetry.io/otel/trace"
+	"io"
 	apimachinery "k8s.io/apimachinery/pkg/runtime/schema"
+	"os/exec"
+	"strings"
 
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/access"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/config"
@@ -64,6 +64,7 @@ type Deployer struct {
 	debugger            debug.Debugger
 	statusMonitor       kstatus.Monitor
 	syncer              sync.Syncer
+	downloader          download.Downloader
 	hookRunner          hooks.Runner
 	originalImages      []graph.Artifact // the set of images parsed from the Deployer's manifest set
 	localImages         []graph.Artifact // the set of images marked as "local" by the Runner
@@ -81,6 +82,10 @@ type Deployer struct {
 
 	transformableAllowlist map[apimachinery.GroupKind]latest.ResourceFilter
 	transformableDenylist  map[apimachinery.GroupKind]latest.ResourceFilter
+}
+
+func (k *Deployer) GetDownloader() download.Downloader {
+	return k.downloader
 }
 
 // NewDeployer returns a new Deployer for a DeployConfig filled
@@ -130,6 +135,7 @@ func NewDeployer(cfg Config, labeller *label.DefaultLabeller, d *latest.KubectlD
 		KubectlDeploy:       d,
 		podSelector:         podSelector,
 		namespaces:          &namespaces,
+		downloader:          download.NewKubernetesDownloader(artifacts, kubectl.CLI),
 		accessor:            component.NewAccessor(cfg, cfg.GetKubeContext(), kubectl.CLI, podSelector, labeller, &namespaces),
 		debugger:            component.NewDebugger(cfg.Mode(), podSelector, &namespaces, cfg.GetKubeContext()),
 		imageLoader:         component.NewImageLoader(cfg, kubectl.CLI),
@@ -240,7 +246,6 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 	if manifests, err = manifest.ApplyTransforms(manifests, builds, k.insecureRegistries, debugHelpersRegistry); err != nil {
 		return err
 	}
-
 	childCtx, endTrace = instrumentation.StartTrace(ctx, "Deploy_LoadImages")
 	if err := k.imageLoader.LoadImages(childCtx, out, k.localImages, k.originalImages, builds); err != nil {
 		endTrace(instrumentation.TraceEndError(err))
@@ -268,6 +273,7 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 		endTrace(instrumentation.TraceEndError(err))
 		return err
 	}
+
 	deployedImages, _ := manifests.GetImages(manifest.NewResourceSelectorImages(k.transformableAllowlist, k.transformableDenylist))
 
 	k.TrackBuildArtifacts(builds, deployedImages)

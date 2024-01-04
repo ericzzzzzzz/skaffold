@@ -44,6 +44,8 @@ var (
 
 type Client interface {
 	EnableDebug() bool
+
+	EnableDownloader() bool
 	OverrideProtocols() []string
 	ConfigFile() string
 	KubeConfig() string
@@ -91,6 +93,9 @@ func PrepareSkaffoldFilter(h Client, builds []graph.Artifact, flags []string) (s
 // Skaffold manifest filters, such a debugging, image replacement, and applying labels.
 func generateSkaffoldFilter(h Client, buildsFile string, flags []string) []string {
 	args := []string{"filter", "--kube-context", h.KubeContext()}
+	if h.EnableDownloader() {
+		args = append(args, "--downloader")
+	}
 	if h.EnableDebug() {
 		args = append(args, "--debugging")
 		for _, overrideProtocol := range h.OverrideProtocols() {

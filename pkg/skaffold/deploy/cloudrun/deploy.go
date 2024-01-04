@@ -19,6 +19,7 @@ package cloudrun
 import (
 	"context"
 	"fmt"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/download"
 	"io"
 	"net/http"
 
@@ -72,6 +73,11 @@ type Deployer struct {
 	// additional client options for connecting to Cloud Run, used for tests
 	clientOptions []option.ClientOption
 	useGcpOptions bool
+}
+
+func (d *Deployer) GetDownloader() download.Downloader {
+	//TODO implement me
+	panic("implement me")
 }
 
 // NewDeployer creates a new Deployer for Cloud Run from the Skaffold deploy config.

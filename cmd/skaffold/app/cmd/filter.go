@@ -42,6 +42,7 @@ import (
 
 // for tests
 var doFilter = runFilter
+var downloaderFilter bool
 
 // NewCmdFilter describes the CLI command to filter and transform a set of Kubernetes manifests.
 func NewCmdFilter() *cobra.Command {
@@ -56,6 +57,7 @@ func NewCmdFilter() *cobra.Command {
 		WithFlags([]*Flag{
 			{Value: &renderFromBuildOutputFile, Name: "build-artifacts", Shorthand: "a", Usage: "File containing build result from a previous 'skaffold build --file-output'"},
 			{Value: &debuggingFilters, Name: "debugging", DefValue: false, Usage: `Apply debug transforms similar to "skaffold debug"`, IsEnum: true},
+			{Value: &downloaderFilter, Name: "downloader", DefValue: false, Usage: `Apply downloader transformer to manifests`, IsEnum: true},
 			{Value: &debug.Protocols, Name: "protocols", DefValue: []string{}, Usage: "Priority sorted order of debugger protocols to support."},
 			{Value: &postRenderer, Name: "post-renderer", DefValue: "", FlagAddMethod: "StringVar", Usage: "Any executable that accepts rendered Kubernetes manifests on STDIN and returns valid Kubernetes manifests on STDOUT"},
 		}).
@@ -110,6 +112,19 @@ func runFilter(ctx context.Context, out io.Writer, debuggingFilters bool, postRe
 			return err
 		}
 		manifestList, err = manifestList.ReplaceImages(ctx, buildArtifacts, manifest.NewResourceSelectorImages(allow, deny))
+		if err != nil {
+			return err
+		}
+
+		var artifacts []*latest.Artifact
+		for _, cfg := range configs {
+			artifacts = append(artifacts, cfg.(*latest.SkaffoldConfig).Build.Artifacts...)
+		}
+
+		if downloaderFilter {
+			manifestList, err = downloaderTransformer(ctx, artifacts)(manifestList, buildArtifacts, manifest.Registries{})
+		}
+
 		if err != nil {
 			return err
 		}

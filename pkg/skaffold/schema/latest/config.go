@@ -18,7 +18,6 @@ package latest
 
 import (
 	"encoding/json"
-
 	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 
@@ -1090,6 +1089,9 @@ type Artifact struct {
 
 	// RuntimeType specifies the target language runtime for this artifact that is used to configure debug support. Should be one of `go`, `nodejs`, `jvm`, `python` or `netcore`. If unspecified the language runtime is inferred from common heuristics for the list of supported runtimes.
 	RuntimeType string `yaml:"runtimeType,omitempty"`
+
+	// DownstreamSync *beta*
+	DownstreamSync *DownstreamSync `yaml:"download,omitempty"`
 }
 
 // Sync *beta* specifies what files to sync into the container.
@@ -1755,6 +1757,19 @@ type ResourceFilter struct {
 	Labels []string `yaml:"labels,omitempty"`
 	// PodSpec is an optional slice of JSON-path-like paths of where pod spec properties can be overwritten.
 	PodSpec []string `yaml:"podSpec,omitempty"`
+}
+
+type DownstreamSyncEntry struct {
+	// RemoteSrc relative path to the container workspace
+	RemoteSrc string `yaml:"remoteSrc" yamltags:"required"`
+	// LocalDst relative path to the skaffold workspace at the moment
+	LocalDst string `yaml:"localDst" yamltags:"required"`
+}
+
+type DownstreamSync struct {
+	Entry []DownstreamSyncEntry `yaml:"entry" yamltags:"required"`
+	// Excludes glob rules to exclude files from downstream sync
+	Excludes []string `yaml:"excludes,omitempty"`
 }
 
 // UnmarshalYAML provides a custom unmarshaller to deal with

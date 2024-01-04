@@ -204,6 +204,8 @@ func (r *SkaffoldRunner) doDev(ctx context.Context, out io.Writer) error {
 			log.Entry(ctx).Warnf("failed to start debugger: %v", err)
 		}
 
+		r.deployer.GetDownloader().Start(ctx, bRes, out)
+
 		endTrace()
 	}
 	event.DevLoopComplete(r.devIteration)
@@ -320,6 +322,9 @@ func (r *SkaffoldRunner) Dev(ctx context.Context, out io.Writer, artifacts []*la
 	if err := r.deployer.GetLogger().Start(ctx, out); err != nil {
 		return fmt.Errorf("starting logger: %w", err)
 	}
+
+	builds := r.Builds
+	r.deployer.GetDownloader().Start(ctx, builds, out)
 
 	g := getTransposeGraph(artifacts)
 	// Watch artifacts

@@ -57,14 +57,14 @@ func TestPodEncodeDecode(t *testing.T) {
 		TypeMeta:   metav1.TypeMeta{APIVersion: v1.SchemeGroupVersion.Version, Kind: "Pod"},
 		ObjectMeta: metav1.ObjectMeta{Name: "podname"},
 		Spec:       v1.PodSpec{Containers: []v1.Container{{Name: "name1", Image: "image1"}}}}
-	b, err := encodeAsYaml(pod)
+	b, err := EncodeAsYaml(pod)
 	if err != nil {
-		t.Errorf("encodeAsYaml() failed: %v", err)
+		t.Errorf("EncodeAsYaml() failed: %v", err)
 		return
 	}
-	o, _, err := decodeFromYaml(b, nil, nil)
+	o, _, err := DecodeFromYaml(b, nil, nil)
 	if err != nil {
-		t.Errorf("decodeFromYaml() failed: %v", err)
+		t.Errorf("DecodeFromYaml() failed: %v", err)
 		return
 	}
 	switch o := o.(type) {
@@ -74,7 +74,7 @@ func TestPodEncodeDecode(t *testing.T) {
 		testutil.CheckDeepEqual(t, "name1", o.Spec.Containers[0].Name)
 		testutil.CheckDeepEqual(t, "image1", o.Spec.Containers[0].Image)
 	default:
-		t.Errorf("decodeFromYaml() failed: expected *v1.Pod but got %T", o)
+		t.Errorf("DecodeFromYaml() failed: expected *v1.Pod but got %T", o)
 	}
 }
 

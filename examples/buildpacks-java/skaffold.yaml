@@ -6,6 +6,10 @@ build:
     buildpacks:
       env:
       - GOOGLE_RUNTIME_VERSION=8
+    download:
+      entry:
+        - src: "."
+          dst: "."
 profiles:
 - name: gcb
   build:

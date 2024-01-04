@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/download"
 	"io"
 	"os"
 	"path/filepath"
@@ -87,6 +88,8 @@ type Deployer struct {
 	statusMonitor status.Monitor
 	syncer        sync.Syncer
 	hookRunner    hooks.Runner
+	downloader    download.Downloader
+	dev           bool
 
 	podSelector    *kubernetes.ImageList
 	originalImages []graph.Artifact // the set of images defined in ArtifactOverrides
@@ -116,11 +119,17 @@ type Deployer struct {
 	transformableDenylist  map[apimachinery.GroupKind]latest.ResourceFilter
 }
 
+func (h *Deployer) GetDownloader() download.Downloader {
+	return h.downloader
+}
+
 func (h Deployer) ManifestOverrides() map[string]string {
 	return map[string]string{}
 }
 
-func (h Deployer) EnableDebug() bool           { return h.enableDebug }
+func (h Deployer) EnableDebug() bool { return h.enableDebug }
+
+func (h Deployer) EnableDownloader() bool      { return h.dev }
 func (h Deployer) OverrideProtocols() []string { return h.overrideProtocols }
 func (h Deployer) ConfigFile() string          { return h.configFile }
 func (h Deployer) KubeContext() string         { return h.kubeContext }
@@ -178,6 +187,7 @@ func NewDeployer(ctx context.Context, cfg Config, labeller *label.DefaultLabelle
 		accessor:               component.NewAccessor(cfg, cfg.GetKubeContext(), kubectl, podSelector, labeller, &namespaces),
 		debugger:               component.NewDebugger(cfg.Mode(), podSelector, &namespaces, cfg.GetKubeContext()),
 		imageLoader:            component.NewImageLoader(cfg, kubectl),
+		downloader:             download.NewKubernetesDownloader(artifacts, kubectl),
 		logger:                 logger,
 		statusMonitor:          component.NewMonitor(cfg, cfg.GetKubeContext(), labeller, &namespaces, customResourceSelectors),
 		syncer:                 component.NewSyncer(kubectl, &namespaces, logger.GetFormatter()),
@@ -193,6 +203,7 @@ func NewDeployer(ctx context.Context, cfg Config, labeller *label.DefaultLabelle
 		bV:                     hv,
 		enableDebug:            cfg.Mode() == config.RunModes.Debug,
 		overrideProtocols:      debug.Protocols,
+		dev:                    cfg.Mode() == config.RunModes.Dev,
 		isMultiConfig:          cfg.IsMultiConfig(),
 		transformableAllowlist: transformableAllowlist,
 		transformableDenylist:  transformableDenylist,
