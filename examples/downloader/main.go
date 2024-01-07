@@ -22,7 +22,7 @@ func main() {
 	temp, err := os.Create("/tmp/sync-log.txt")
 	//temp, err := os.CreateTemp("/tmp", "")
 	// Add the directory to watch
-	err = watcher.Add("")
+	err = watcher.Add("anything")
 	if err != nil {
 		log.Fatal(err)
 	}

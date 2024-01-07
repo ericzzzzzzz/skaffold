@@ -1,4 +1,4 @@
-FROM golang:1.18 as builder
+FROM golang:1.21 as builder
 WORKDIR /code
 COPY main.go .
 COPY go.mod .
@@ -9,6 +9,7 @@ RUN go build -gcflags="${SKAFFOLD_GO_GCFLAGS}" -trimpath -o /app main.go
 FROM alpine:3
 # Define GOTRACEBACK to mark this container as using the Go language runtime
 # for `skaffold debug` (https://skaffold.dev/docs/workflows/debug/).
+WORKDIR /aaa
 ENV GOTRACEBACK=single
 CMD ["./app"]
 COPY --from=builder /app .

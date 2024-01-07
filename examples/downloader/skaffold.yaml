@@ -2,7 +2,7 @@ apiVersion: skaffold/v4beta8
 kind: Config
 build:
   artifacts:
-  - image: skaffold-example
+  - image: down
 manifests:
   rawYaml:
   - k8s-pod.yaml
