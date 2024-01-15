@@ -10,7 +10,7 @@ WORKDIR /app
 # Copy project files and dependencies
 COPY . .
 
-RUN go build server/main.go
-RUN go build connect/main.go
+RUN go build -o server server/main.go
+RUN go build -o connect/main.go
 
 CMD ["./server"]

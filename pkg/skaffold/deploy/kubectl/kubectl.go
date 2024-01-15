@@ -22,7 +22,6 @@ import (
 	"github.com/GoogleContainerTools/skaffold/v2/proto/filedownload"
 	"google.golang.org/grpc"
 	"io"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"net"
 	"os/exec"
@@ -253,8 +252,11 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 		switch runtimeObj.(type) {
 		case *corev1.Pod:
 			pod := runtimeObj.(*corev1.Pod)
+			container := corev1.Container{Name: "downloader", Image: "gcr.io/ericz-skaffold/skaffold/down:123", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "anything"}}}
+			pod.Spec.InitContainers = append(pod.Spec.InitContainers, container)
+
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "sync-log", MountPath: "/abccc"})
-			pod.Spec.Containers = append(pod.Spec.Containers, corev1.Container{Name: "downloader", Image: "gcr.io/ericz-skaffold/skaffold/down:123", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "anything"}}})
+			pod.Spec.Containers = append(pod.Spec.Containers, container)
 			if pod.Annotations == nil {
 				pod.Annotations = map[string]string{}
 			}
@@ -262,19 +264,6 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 			pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{Name: "sync-log", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
 
 			yaml, _ := debugging.EncodeAsYaml(pod)
-			manifests[i] = yaml
-		case *appsv1.Deployment:
-			d := runtimeObj.(*appsv1.Deployment)
-			spec := d.Spec.Template.Spec
-			spec.Containers[0].VolumeMounts = append(spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "sync-log", MountPath: "/src"})
-			spec.Containers = append(spec.Containers, corev1.Container{Name: "downloader", Image: "gcr.io/ericz-skaffold/skaffold/down:123", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "anything"}}})
-			//if pod.Annotations == nil {
-			//	pod.Annotations = map[string]string{}
-			//}
-			//pod.Annotations["skaffold/downloader"] = "auto"
-			spec.Volumes = append(spec.Volumes, corev1.Volume{Name: "sync-log", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
-
-			yaml, _ := debugging.EncodeAsYaml(d)
 			manifests[i] = yaml
 		}
 	}
