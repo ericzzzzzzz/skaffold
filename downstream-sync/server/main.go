@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 )
 
 type fileServer struct {
@@ -57,6 +58,12 @@ func main() {
 	err = s.watcher.Add(".")
 	if err != nil {
 		log.Fatalf("Failed to watch: %v", err)
+	}
+	err = exec.Command("./app").Start()
+	if err != nil {
+		fmt.Println("failed to start app")
+		fmt.Println(err)
+		return
 	}
 
 	grpcServer := grpc.NewServer()
