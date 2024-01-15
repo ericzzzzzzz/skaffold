@@ -19,12 +19,15 @@ package kubectl
 import (
 	"context"
 	"fmt"
-	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/debugging"
+	"github.com/GoogleContainerTools/skaffold/v2/proto/filedownload"
+	"google.golang.org/grpc"
 	"io"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"net"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/segmentio/textio"
 	"go.opentelemetry.io/otel/trace"
@@ -41,6 +44,7 @@ import (
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/hooks"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/instrumentation"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/debugging"
 	k8slogger "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/logger"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/manifest"
 	kstatus "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/status"
@@ -235,7 +239,6 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 		return fmt.Errorf("nothing to deploy")
 	}
 
-	fmt.Println("123333")
 	// Add debug transformations
 	debugHelpersRegistry, err := config.GetDebugHelpersRegistry(k.globalConfig)
 	if err != nil {
@@ -303,6 +306,32 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 		endTrace(instrumentation.TraceEndError(err))
 		return err
 	}
+
+	pr, pw := io.Pipe()
+	gr, gw := io.Pipe()
+	command := k.kubectl.CLI.Command(ctx, "exec", "-p", "getting-started", "connect")
+	command.Stdout = pw
+	command.Stdin = gr
+	err = command.Start()
+	if err != nil {
+		fmt.Println("failed to connect the remote ")
+		return err
+	}
+	conn, err := grpc.DialContext(ctx, "", grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+		return Conn{pr, gw}, nil
+	}))
+
+	client := filedownload.NewFileServiceClient(conn)
+	watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
+	go func() {
+		recv, err2 := watch.Recv()
+		if err2 != nil {
+			fmt.Println(err2)
+		}
+		fmt.Printf("reveived event %v\n ", recv)
+	}()
+	time.Sleep(10 * time.Second)
+
 	deployedImages, _ := manifests.GetImages(manifest.NewResourceSelectorImages(k.transformableAllowlist, k.transformableDenylist))
 
 	k.TrackBuildArtifacts(builds, deployedImages)
@@ -361,4 +390,42 @@ func (k *Deployer) Cleanup(ctx context.Context, out io.Writer, dryRun bool, mani
 // Dependencies lists all the files that describe what needs to be deployed.
 func (k *Deployer) Dependencies() ([]string, error) {
 	return []string{}, nil
+}
+
+type Conn struct {
+	*io.PipeReader
+	*io.PipeWriter
+}
+
+func (c Conn) LocalAddr() net.Addr {
+
+	panic("implement me")
+}
+
+func (c Conn) RemoteAddr() net.Addr {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c Conn) SetDeadline(t time.Time) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c Conn) SetReadDeadline(t time.Time) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c Conn) SetWriteDeadline(t time.Time) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (c Conn) Close() error {
+	err := c.PipeReader.Close()
+	if err != nil {
+		return err
+	}
+	return c.PipeWriter.Close()
 }

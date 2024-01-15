@@ -1,0 +1,33 @@
+syntax = "proto3";
+package proto.filedownload;
+option go_package = "github.com/GoogleContainerTools/skaffold/proto/filedownload";
+
+
+
+service FileService {
+  rpc DownloadFile (DownloadRequest) returns (stream DownloadResponse) {}
+  rpc Watch(FileWatchRequest) returns (stream FileEvent) {}
+}
+
+message DownloadRequest {
+  string path = 1;
+}
+
+message DownloadResponse {
+  bytes chunk = 1;
+}
+
+message FileEvent {
+  string path = 1;
+  enum EventType {
+    CREATE = 0;
+    MODIFY = 1;
+    DELETE = 2;
+    RENAME = 3; // For more granular events
+  }
+  EventType event_type = 2;
+  int64 version = 3;
+}
+
+
+message FileWatchRequest { }
