@@ -296,39 +296,40 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 		return err
 	}
 
-	time.Sleep(10 * time.Second)
-	pr, pw := io.Pipe()
-	gr, gw := io.Pipe()
-	command := k.kubectl.CLI.Command(ctx, "exec", "-it", "pods/getting-started", "--", "/abccc/app-connect")
-	command.Stdout = pw
-	command.Stdin = gr
-	err = command.Start()
-	fmt.Println(command.Args)
-	if err != nil {
-		fmt.Println("failed to connect the remote ")
-		return err
-	}
-	conn, err := grpc.DialContext(ctx, "", grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-		return &Conn{pr, gw}, nil
-	}))
-
-	fmt.Println("1111")
-	fmt.Println(conn)
-	//conn.Connect()
-	client := filedownload.NewFileServiceClient(conn)
-	fmt.Println("222")
-	file, err := client.DownloadFile(ctx, &filedownload.DownloadRequest{Path: "hello.txt"})
-	if err != nil {
-		fmt.Println(err)
-	}
-	file.Recv()
-	watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
 	go func() {
-		recv, err2 := watch.Recv()
-		if err2 != nil {
-			fmt.Println(err2)
+		time.Sleep(10 * time.Second)
+		pr, pw := io.Pipe()
+		gr, gw := io.Pipe()
+		command := k.kubectl.Command(ctx, "exec", "-it", "pods/getting-started", "--", "/abccc/app-connect")
+		command.Stdout = pw
+		command.Stdin = gr
+		err = command.Start()
+		fmt.Println(command.Args)
+		if err != nil {
+			fmt.Println("failed to connect the remote ")
+			fmt.Println(err)
 		}
-		fmt.Printf("reveived event %v\n ", recv)
+		conn, err := grpc.DialContext(ctx, "", grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+			return &Conn{pr, gw}, nil
+		}))
+
+		fmt.Println(conn)
+		//conn.Connect()
+		client := filedownload.NewFileServiceClient(conn)
+		fmt.Println("222")
+		file, err := client.DownloadFile(ctx, &filedownload.DownloadRequest{Path: "hello.txt"})
+		if err != nil {
+			fmt.Println(err)
+		}
+		file.Recv()
+		watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
+		go func() {
+			recv, err2 := watch.Recv()
+			if err2 != nil {
+				fmt.Println(err2)
+			}
+			fmt.Printf("reveived event %v\n ", recv)
+		}()
 	}()
 
 	deployedImages, _ := manifests.GetImages(manifest.NewResourceSelectorImages(k.transformableAllowlist, k.transformableDenylist))

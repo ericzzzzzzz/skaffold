@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net"
@@ -15,7 +14,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to connect: %v", err)
 	}
-	fmt.Println("Successfully connected")
 
 	go func() {
 		_, err := io.Copy(conn, os.Stdin)
