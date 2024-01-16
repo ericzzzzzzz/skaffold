@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"github.com/GoogleContainerTools/skaffold/v2/proto/filedownload"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
 	corev1 "k8s.io/api/core/v1"
 	"net"
@@ -309,27 +310,35 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 			fmt.Println("failed to connect the remote ")
 			fmt.Println(err)
 		}
-		conn, err := grpc.DialContext(ctx, "", grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+		conn, err := grpc.DialContext(ctx, "", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
 			return &Conn{pr, gw}, nil
 		}))
+		if err != nil {
+			fmt.Println(err)
+		}
 
 		fmt.Println(conn)
 		//conn.Connect()
 		client := filedownload.NewFileServiceClient(conn)
 		fmt.Println("222")
-		file, err := client.DownloadFile(ctx, &filedownload.DownloadRequest{Path: "hello.txt"})
+
+		watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
 		if err != nil {
 			fmt.Println(err)
 		}
-		file.Recv()
-		watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
-		go func() {
-			recv, err2 := watch.Recv()
-			if err2 != nil {
-				fmt.Println(err2)
-			}
-			fmt.Printf("reveived event %v\n ", recv)
-		}()
+		recv, err := watch.Recv()
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(recv)
+
+		//go func() {
+		//	recv, err2 := watch.Recv()
+		//	if err2 != nil {
+		//		fmt.Println(err2)
+		//	}
+		//	fmt.Printf("reveived event %v\n ", recv)
+		//}()
 	}()
 
 	deployedImages, _ := manifests.GetImages(manifest.NewResourceSelectorImages(k.transformableAllowlist, k.transformableDenylist))

@@ -2,32 +2,33 @@ package main
 
 import (
 	"io"
-	"log"
 	"net"
 	"os"
 )
 
 func main() {
 
-	done := make(chan struct{})
-	conn, err := net.Dial("unix", "/tmp/downstream.sock")
+	sockPath := "/tmp/downstream.sock"
+
+	conn, err := net.Dial("unix", sockPath)
 	if err != nil {
-		log.Fatalf("Failed to connect: %v", err)
+		panic(err)
 	}
+	defer conn.Close()
+	done := make(chan struct{})
 
 	go func() {
-		_, err := io.Copy(conn, os.Stdin)
+		_, err = io.Copy(os.Stdout, conn)
 		if err != nil {
-			return
+			panic(err)
 		}
 	}()
 
 	go func() {
-		_, err := io.Copy(os.Stdout, conn)
+		_, err = io.Copy(conn, os.Stdin)
 		if err != nil {
-			return
+			panic(err)
 		}
 	}()
-
 	<-done
 }

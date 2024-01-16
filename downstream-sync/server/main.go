@@ -85,6 +85,7 @@ func main() {
 }
 
 func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchServer) error {
+	fmt.Println("received request..")
 
 	for {
 		select {
