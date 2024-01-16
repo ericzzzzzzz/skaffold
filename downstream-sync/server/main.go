@@ -78,7 +78,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 	pb.RegisterFileServiceServer(grpcServer, &s)
 
-	log.Printf("Server listening at %v", listener.Addr())
+	fmt.Printf("Server listening at %v", listener.Addr())
 	if err := grpcServer.Serve(listener); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}

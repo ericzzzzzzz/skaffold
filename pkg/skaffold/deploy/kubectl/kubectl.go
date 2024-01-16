@@ -299,19 +299,29 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 	time.Sleep(10 * time.Second)
 	pr, pw := io.Pipe()
 	gr, gw := io.Pipe()
-	command := k.kubectl.CLI.Command(ctx, "exec", "pods/getting-started", "/abccc/app-connect")
+	command := k.kubectl.CLI.Command(ctx, "exec", "-it", "pods/getting-started", "--", "/abccc/app-connect")
 	command.Stdout = pw
 	command.Stdin = gr
 	err = command.Start()
+	fmt.Println(command.Args)
 	if err != nil {
 		fmt.Println("failed to connect the remote ")
 		return err
 	}
 	conn, err := grpc.DialContext(ctx, "", grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-		return Conn{pr, gw}, nil
+		return &Conn{pr, gw}, nil
 	}))
 
+	fmt.Println("1111")
+	fmt.Println(conn)
+	//conn.Connect()
 	client := filedownload.NewFileServiceClient(conn)
+	fmt.Println("222")
+	file, err := client.DownloadFile(ctx, &filedownload.DownloadRequest{Path: "hello.txt"})
+	if err != nil {
+		fmt.Println(err)
+	}
+	file.Recv()
 	watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
 	go func() {
 		recv, err2 := watch.Recv()
@@ -386,32 +396,34 @@ type Conn struct {
 	*io.PipeWriter
 }
 
-func (c Conn) LocalAddr() net.Addr {
+func (c *Conn) LocalAddr() net.Addr {
+	return &net.UnixAddr{
+		Name: "",
+		Net:  "Unix",
+	}
 
-	panic("implement me")
 }
 
-func (c Conn) RemoteAddr() net.Addr {
-	//TODO implement me
-	panic("implement me")
+func (c *Conn) RemoteAddr() net.Addr {
+	return &net.UnixAddr{
+		Name: "",
+		Net:  "Unix",
+	}
 }
 
-func (c Conn) SetDeadline(t time.Time) error {
-	//TODO implement me
-	panic("implement me")
+func (c *Conn) SetDeadline(t time.Time) error {
+	return nil
 }
 
-func (c Conn) SetReadDeadline(t time.Time) error {
-	//TODO implement me
-	panic("implement me")
+func (c *Conn) SetReadDeadline(t time.Time) error {
+	return nil
 }
 
-func (c Conn) SetWriteDeadline(t time.Time) error {
-	//TODO implement me
-	panic("implement me")
+func (c *Conn) SetWriteDeadline(t time.Time) error {
+	return nil
 }
 
-func (c Conn) Close() error {
+func (c *Conn) Close() error {
 	err := c.PipeReader.Close()
 	if err != nil {
 		return err
