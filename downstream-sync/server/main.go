@@ -55,11 +55,20 @@ func main() {
 	s := fileServer{
 		watcher: watcher,
 	}
-	err = s.watcher.Add(".")
+
+	dir, err := os.Getwd()
+	if err != nil {
+		log.Fatalf("Failed to get : %v", err)
+	}
+	fmt.Println("working dir::" + dir)
+
+	err = s.watcher.Add(dir)
 	if err != nil {
 		log.Fatalf("Failed to watch: %v", err)
 	}
-	err = exec.Command("./app").Start()
+	command := exec.Command("./app")
+	command.Stdout = os.Stdout
+	command.Start()
 	if err != nil {
 		fmt.Println("failed to start app")
 		fmt.Println(err)

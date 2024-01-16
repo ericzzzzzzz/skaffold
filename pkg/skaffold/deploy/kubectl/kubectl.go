@@ -19,6 +19,8 @@ package kubectl
 import (
 	"context"
 	"fmt"
+	"github.com/GoogleContainerTools/skaffold/v2/proto/filedownload"
+	"google.golang.org/grpc"
 	"io"
 	corev1 "k8s.io/api/core/v1"
 	"net"
@@ -250,7 +252,7 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 		switch runtimeObj.(type) {
 		case *corev1.Pod:
 			pod := runtimeObj.(*corev1.Pod)
-			container := corev1.Container{Name: "downloader", Image: "gcr.io/ericz-skaffold/skaffold/down@sha256:1bfde4e852a8bfc987d752def2c353938edc3c9442519e9a2529dd54c08f98ad", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "/abccc"}}}
+			container := corev1.Container{Name: "downloader", Image: "sync:222333", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "/abccc"}}}
 			pod.Spec.InitContainers = append(pod.Spec.InitContainers, container)
 
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "sync-log", MountPath: "/abccc"})
@@ -295,29 +297,29 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 	}
 
 	time.Sleep(10 * time.Second)
-	//pr, pw := io.Pipe()
-	//gr, gw := io.Pipe()
-	//command := k.kubectl.CLI.Command(ctx, "exec", "-p", "default/getting-started", "/abccc/connect")
-	//command.Stdout = pw
-	//command.Stdin = gr
-	//err = command.Start()
-	//if err != nil {
-	//	fmt.Println("failed to connect the remote ")
-	//	return err
-	//}
-	//conn, err := grpc.DialContext(ctx, "", grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-	//	return Conn{pr, gw}, nil
-	//}))
-	//
-	//client := filedownload.NewFileServiceClient(conn)
-	//watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
-	//go func() {
-	//	recv, err2 := watch.Recv()
-	//	if err2 != nil {
-	//		fmt.Println(err2)
-	//	}
-	//	fmt.Printf("reveived event %v\n ", recv)
-	//}()
+	pr, pw := io.Pipe()
+	gr, gw := io.Pipe()
+	command := k.kubectl.CLI.Command(ctx, "exec", "pods/getting-started", "/abccc/app-connect")
+	command.Stdout = pw
+	command.Stdin = gr
+	err = command.Start()
+	if err != nil {
+		fmt.Println("failed to connect the remote ")
+		return err
+	}
+	conn, err := grpc.DialContext(ctx, "", grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+		return Conn{pr, gw}, nil
+	}))
+
+	client := filedownload.NewFileServiceClient(conn)
+	watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
+	go func() {
+		recv, err2 := watch.Recv()
+		if err2 != nil {
+			fmt.Println(err2)
+		}
+		fmt.Printf("reveived event %v\n ", recv)
+	}()
 
 	deployedImages, _ := manifests.GetImages(manifest.NewResourceSelectorImages(k.transformableAllowlist, k.transformableDenylist))
 
