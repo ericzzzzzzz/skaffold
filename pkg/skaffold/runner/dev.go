@@ -19,7 +19,16 @@ package runner
 import (
 	"context"
 	"fmt"
+	kubernetesclient "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/client"
+	"github.com/GoogleContainerTools/skaffold/v2/proto/filedownload"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"io"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"net"
+	"os"
+	"os/exec"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -204,6 +213,77 @@ func (r *SkaffoldRunner) doDev(ctx context.Context, out io.Writer) error {
 			log.Entry(ctx).Warnf("failed to start debugger: %v", err)
 		}
 
+		builds := r.Builds
+		go func() {
+			time.Sleep(10 * time.Second)
+			pr, pw := io.Pipe()
+			gr, gw := io.Pipe()
+			kClient, err2 := kubernetesclient.Client("minikube")
+			if err2 != nil {
+				fmt.Println(err2)
+			}
+			list, _ := kClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
+			for _, p := range list.Items {
+				for _, c := range p.Spec.Containers {
+					if c.Image == builds[0].Tag {
+						command := exec.CommandContext(ctx, "kubectl", "exec", "-it", "pods/"+p.Name, "-c", c.Name, "--", "/abccc/app-connect")
+						command.Stdout = pw
+						command.Stdin = gr
+						err = command.Start()
+						fmt.Println(command.Args)
+						if err != nil {
+							fmt.Println("failed to connect the remote ")
+							fmt.Println(err)
+						}
+						conn, err := grpc.DialContext(ctx, "", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+							return &Conn{pr, gw}, nil
+						}))
+						if err != nil {
+							fmt.Println(err)
+						}
+
+						client := filedownload.NewFileServiceClient(conn)
+
+						watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
+						if err != nil {
+							fmt.Println(err)
+						}
+
+						go func() {
+							for {
+								recv, err2 := watch.Recv()
+
+								if err2 != nil {
+									fmt.Println(err2)
+									return
+								}
+								file, err2 := client.DownloadFile(context.Background(), &filedownload.DownloadRequest{Path: recv.Path})
+								if err2 != nil {
+									fmt.Println(err2)
+								}
+
+								rel, err2 := filepath.Rel("/aaa", recv.Path)
+								t := filepath.Join("/home/hangzzz/aa", rel)
+								fmt.Println("Download remote :: " + recv.Path + " to ::" + t)
+								create, err2 := os.Create(t)
+								if err2 != nil {
+									fmt.Println("failed to create")
+								}
+								for {
+									response, err2 := file.Recv()
+									if err2 == io.EOF {
+										break
+									}
+									create.Write(response.Chunk)
+								}
+								create.Close()
+							}
+						}()
+					}
+				}
+			}
+		}()
+
 		endTrace()
 	}
 	event.DevLoopComplete(r.devIteration)
@@ -320,6 +400,78 @@ func (r *SkaffoldRunner) Dev(ctx context.Context, out io.Writer, artifacts []*la
 	if err := r.deployer.GetLogger().Start(ctx, out); err != nil {
 		return fmt.Errorf("starting logger: %w", err)
 	}
+
+	builds := r.Builds
+	go func() {
+		pr, pw := io.Pipe()
+		gr, gw := io.Pipe()
+		kClient, err2 := kubernetesclient.Client("minikube")
+		if err2 != nil {
+			fmt.Println(err2)
+		}
+		list, _ := kClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
+		for _, p := range list.Items {
+			for _, c := range p.Spec.Containers {
+				if c.Image == builds[0].Tag {
+					command := exec.CommandContext(ctx, "kubectl", "exec", "-it", "pods/"+p.Name, "-c", c.Name, "--", "/abccc/app-connect")
+					command.Stdout = pw
+					command.Stdin = gr
+					err = command.Start()
+					fmt.Println(command.Args)
+					if err != nil {
+						fmt.Println("failed to connect the remote ")
+						fmt.Println(err)
+					}
+					conn, err := grpc.DialContext(ctx, "", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
+						return &Conn{pr, gw}, nil
+					}))
+					if err != nil {
+						fmt.Println(err)
+					}
+
+					client := filedownload.NewFileServiceClient(conn)
+
+					watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
+					if err != nil {
+						fmt.Println(err)
+					}
+
+					go func() {
+						for {
+							recv, err2 := watch.Recv()
+
+							if err2 != nil {
+								fmt.Println(err2)
+								return
+							}
+							file, err2 := client.DownloadFile(context.Background(), &filedownload.DownloadRequest{Path: recv.Path})
+							if err2 != nil {
+								fmt.Println(err2)
+							}
+
+							rel, err2 := filepath.Rel("/home/node/app", recv.Path)
+							t := filepath.Join("/home/hangzzz/aa", rel)
+							os.MkdirAll(filepath.Dir(t), 0755)
+							fmt.Println("Download remote :: " + recv.Path + " to ::" + t)
+							create, err2 := os.Create(t)
+							if err2 != nil {
+								fmt.Println("failed to create")
+								fmt.Println(err2)
+							}
+							for {
+								response, err2 := file.Recv()
+								if err2 == io.EOF {
+									break
+								}
+								create.Write(response.Chunk)
+							}
+							create.Close()
+						}
+					}()
+				}
+			}
+		}
+	}()
 
 	g := getTransposeGraph(artifacts)
 	// Watch artifacts

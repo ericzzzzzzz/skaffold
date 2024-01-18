@@ -19,19 +19,15 @@ package kubectl
 import (
 	"context"
 	"fmt"
-	"github.com/GoogleContainerTools/skaffold/v2/proto/filedownload"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
-	"io"
-	corev1 "k8s.io/api/core/v1"
-	"net"
-	"os/exec"
-	"strings"
-	"time"
-
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/debugging"
 	"github.com/segmentio/textio"
 	"go.opentelemetry.io/otel/trace"
+	"io"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	apimachinery "k8s.io/apimachinery/pkg/runtime/schema"
+	"os/exec"
+	"strings"
 
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/access"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/config"
@@ -44,7 +40,6 @@ import (
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/hooks"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/instrumentation"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes"
-	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/debugging"
 	k8slogger "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/logger"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/manifest"
 	kstatus "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/status"
@@ -266,6 +261,23 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 
 			yaml, _ := debugging.EncodeAsYaml(pod)
 			manifests[i] = yaml
+		case *appsv1.Deployment:
+			d := runtimeObj.(*appsv1.Deployment)
+			podSpec := d.Spec.Template.Spec
+			container := corev1.Container{Name: "downloader", Image: "sync:222333", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "/abccc"}}}
+			podSpec.InitContainers = append(podSpec.InitContainers, container)
+			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "sync-log", MountPath: "/abccc"})
+			podSpec.Containers[0].Command = []string{"/abccc/app-server"}
+			if d.Annotations == nil {
+				d.Annotations = map[string]string{}
+			}
+			d.Annotations["skaffold/downloader"] = "auto"
+			podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{Name: "sync-log", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
+			d.Spec.Template.Spec = podSpec
+
+			yaml, _ := debugging.EncodeAsYaml(d)
+			manifests[i] = yaml
+
 		}
 	}
 
@@ -296,50 +308,6 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 		endTrace(instrumentation.TraceEndError(err))
 		return err
 	}
-
-	go func() {
-		time.Sleep(10 * time.Second)
-		pr, pw := io.Pipe()
-		gr, gw := io.Pipe()
-		command := k.kubectl.Command(ctx, "exec", "-it", "pods/getting-started", "--", "/abccc/app-connect")
-		command.Stdout = pw
-		command.Stdin = gr
-		err = command.Start()
-		fmt.Println(command.Args)
-		if err != nil {
-			fmt.Println("failed to connect the remote ")
-			fmt.Println(err)
-		}
-		conn, err := grpc.DialContext(ctx, "", grpc.WithTransportCredentials(insecure.NewCredentials()), grpc.WithContextDialer(func(ctx context.Context, s string) (net.Conn, error) {
-			return &Conn{pr, gw}, nil
-		}))
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		fmt.Println(conn)
-		//conn.Connect()
-		client := filedownload.NewFileServiceClient(conn)
-		fmt.Println("222")
-
-		watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
-		if err != nil {
-			fmt.Println(err)
-		}
-		recv, err := watch.Recv()
-		if err != nil {
-			fmt.Println(err)
-		}
-		fmt.Println(recv)
-
-		//go func() {
-		//	recv, err2 := watch.Recv()
-		//	if err2 != nil {
-		//		fmt.Println(err2)
-		//	}
-		//	fmt.Printf("reveived event %v\n ", recv)
-		//}()
-	}()
 
 	deployedImages, _ := manifests.GetImages(manifest.NewResourceSelectorImages(k.transformableAllowlist, k.transformableDenylist))
 
@@ -399,44 +367,4 @@ func (k *Deployer) Cleanup(ctx context.Context, out io.Writer, dryRun bool, mani
 // Dependencies lists all the files that describe what needs to be deployed.
 func (k *Deployer) Dependencies() ([]string, error) {
 	return []string{}, nil
-}
-
-type Conn struct {
-	*io.PipeReader
-	*io.PipeWriter
-}
-
-func (c *Conn) LocalAddr() net.Addr {
-	return &net.UnixAddr{
-		Name: "",
-		Net:  "Unix",
-	}
-
-}
-
-func (c *Conn) RemoteAddr() net.Addr {
-	return &net.UnixAddr{
-		Name: "",
-		Net:  "Unix",
-	}
-}
-
-func (c *Conn) SetDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *Conn) SetReadDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *Conn) SetWriteDeadline(t time.Time) error {
-	return nil
-}
-
-func (c *Conn) Close() error {
-	err := c.PipeReader.Close()
-	if err != nil {
-		return err
-	}
-	return c.PipeWriter.Close()
 }

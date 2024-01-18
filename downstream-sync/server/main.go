@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 )
 
 type fileServer struct {
@@ -18,22 +19,25 @@ type fileServer struct {
 }
 
 func (s *fileServer) DownloadFile(req *pb.DownloadRequest, stream pb.FileService_DownloadFileServer) error {
+	fmt.Println("req.Path::" + req.Path)
 	f, err := os.Open(req.Path)
-
 	if err != nil {
+		fmt.Println("failed to open")
 		return err
 	}
 
-	buf := make([]byte, 1024)
+	buf := make([]byte, 1024*32)
 	for {
-		reader := io.NewSectionReader(f, 0, 1024)
-		_, err := reader.Read(buf)
+		n, err := f.Read(buf)
 		if err == io.EOF {
 			break
-		} else if err != nil {
+		}
+		if err != nil {
 			return err
 		}
-		if err := stream.Send(&pb.DownloadResponse{Chunk: buf}); err != nil {
+
+		// Send the chunk of file
+		if err := stream.Send(&pb.DownloadResponse{Chunk: buf[:n]}); err != nil {
 			return err
 		}
 	}
@@ -62,11 +66,11 @@ func main() {
 	}
 	fmt.Println("working dir::" + dir)
 
-	err = s.watcher.Add(dir)
+	err = watchDirRecursive(s.watcher, dir)
 	if err != nil {
 		log.Fatalf("Failed to watch: %v", err)
 	}
-	command := exec.Command("./app")
+	command := exec.Command("bash", "-c", "npm run $NODE_ENV")
 	command.Stdout = os.Stdout
 	command.Start()
 	if err != nil {
@@ -78,7 +82,7 @@ func main() {
 	grpcServer := grpc.NewServer()
 	pb.RegisterFileServiceServer(grpcServer, &s)
 
-	fmt.Printf("Server listening at %v", listener.Addr())
+	fmt.Printf("Server listening at %v\n", listener.Addr())
 	if err := grpcServer.Serve(listener); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}
@@ -102,6 +106,13 @@ func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchS
 			switch {
 			case event.Op&fsnotify.Create == fsnotify.Create:
 				fileEvent.EventType = pb.FileEvent_CREATE
+				stat, err := os.Stat(fileEvent.Path)
+				if err != nil {
+					fmt.Println(err)
+					if stat.IsDir() {
+						s.watcher.Add(stat.Name())
+					}
+				}
 			case event.Op&fsnotify.Write == fsnotify.Write:
 				fileEvent.EventType = pb.FileEvent_MODIFY
 			case event.Op&fsnotify.Remove == fsnotify.Remove:
@@ -125,4 +136,22 @@ func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchS
 			log.Println("error:", err)
 		}
 	}
+}
+
+func watchDirRecursive(watcher *fsnotify.Watcher, root string) error {
+	err := watcher.Add(root)
+	if err != nil {
+		return err
+	}
+
+	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		fmt.Println("added path")
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			return watcher.Add(path)
+		}
+		return nil
+	})
 }

@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"time"
 
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/constants"
@@ -136,6 +137,7 @@ See https://skaffold.dev/docs/pipeline-stages/taggers/#how-tagging-works`)
 			return err
 		}
 	}
+
 	eventV2.TaskSucceeded(constants.Deploy)
 	return nil
 }
@@ -147,4 +149,44 @@ func (r *SkaffoldRunner) wasBuilt(tag string) bool {
 		}
 	}
 	return false
+}
+
+type Conn struct {
+	*io.PipeReader
+	*io.PipeWriter
+}
+
+func (c *Conn) LocalAddr() net.Addr {
+	return &net.UnixAddr{
+		Name: "",
+		Net:  "Unix",
+	}
+
+}
+
+func (c *Conn) RemoteAddr() net.Addr {
+	return &net.UnixAddr{
+		Name: "",
+		Net:  "Unix",
+	}
+}
+
+func (c *Conn) SetDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *Conn) SetReadDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *Conn) SetWriteDeadline(t time.Time) error {
+	return nil
+}
+
+func (c *Conn) Close() error {
+	err := c.PipeReader.Close()
+	if err != nil {
+		return err
+	}
+	return c.PipeWriter.Close()
 }
