@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	pb "downstream-sync/filedownload"
 	"fmt"
 	"github.com/fsnotify/fsnotify"
@@ -70,7 +71,13 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to watch: %v", err)
 	}
-	command := exec.Command("bash", "-c", "npm run $NODE_ENV")
+	args := os.Args
+	var subProcessArs []string
+	if len(args) > 2 {
+		subProcessArs = args[2:]
+	}
+
+	command := exec.Command(args[1], subProcessArs...)
 	command.Stdout = os.Stdout
 	command.Start()
 	if err != nil {
@@ -115,6 +122,11 @@ func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchS
 				}
 			case event.Op&fsnotify.Write == fsnotify.Write:
 				fileEvent.EventType = pb.FileEvent_MODIFY
+				h, err := HashFile(event.Name)
+				if err != nil {
+					continue
+				}
+				fileEvent.MD5Hash = h
 			case event.Op&fsnotify.Remove == fsnotify.Remove:
 				fileEvent.EventType = pb.FileEvent_DELETE
 			case event.Op&fsnotify.Rename == fsnotify.Rename:
@@ -145,13 +157,36 @@ func watchDirRecursive(watcher *fsnotify.Watcher, root string) error {
 	}
 
 	return filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
-		fmt.Println("added path")
 		if err != nil {
 			return err
 		}
 		if info.IsDir() {
+			fmt.Println("added path :" + path)
 			return watcher.Add(path)
 		}
 		return nil
 	})
+}
+
+func HashFile(filePath string) (string, error) {
+	// 打开文件
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	// 创建一个新的哈希对象
+	hash := md5.New()
+
+	// 将文件内容复制到哈希对象中
+	if _, err := io.Copy(hash, file); err != nil {
+		return "", err
+	}
+
+	// 计算最终的哈希值
+	hashSum := hash.Sum(nil)
+
+	// 将哈希值转换为十六进制字符串形式
+	return fmt.Sprintf("%x", hashSum), nil
 }

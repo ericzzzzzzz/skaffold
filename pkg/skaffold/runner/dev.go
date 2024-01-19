@@ -439,20 +439,29 @@ func (r *SkaffoldRunner) Dev(ctx context.Context, out io.Writer, artifacts []*la
 					go func() {
 						for {
 							recv, err2 := watch.Recv()
-
 							if err2 != nil {
 								fmt.Println(err2)
 								return
 							}
+
+							rel, err2 := filepath.Rel("/home/node/app", recv.Path)
+							t := filepath.Join("node/", rel)
+							if v, ok := filemon.SyncedHash[t]; ok {
+								if v == recv.MD5Hash {
+									fmt.Println("File already synced.")
+									continue
+								}
+							}
+							fmt.Println("Syncing remote file to local")
+							filemon.SyncedHash[t] = recv.MD5Hash
+							fmt.Println(filemon.SyncedHash)
+
 							file, err2 := client.DownloadFile(context.Background(), &filedownload.DownloadRequest{Path: recv.Path})
 							if err2 != nil {
 								fmt.Println(err2)
 							}
 
-							rel, err2 := filepath.Rel("/home/node/app", recv.Path)
-							t := filepath.Join("/home/hangzzz/aa", rel)
 							os.MkdirAll(filepath.Dir(t), 0755)
-							fmt.Println("Download remote :: " + recv.Path + " to ::" + t)
 							create, err2 := os.Create(t)
 							if err2 != nil {
 								fmt.Println("failed to create")

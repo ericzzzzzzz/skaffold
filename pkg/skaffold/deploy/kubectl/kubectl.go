@@ -248,10 +248,15 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 		switch runtimeObj.(type) {
 		case *corev1.Pod:
 			pod := runtimeObj.(*corev1.Pod)
-			container := corev1.Container{Name: "downloader", Image: "sync:222333", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "/abccc"}}}
+			container := corev1.Container{Name: "downloader", Image: "sync:2223334", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "/abccc"}}}
 			pod.Spec.InitContainers = append(pod.Spec.InitContainers, container)
 
 			pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "sync-log", MountPath: "/abccc"})
+			configuration, _ := debug.RetrieveImageConfiguration(ctx, &graph.Artifact{ImageName: pod.Spec.Containers[0].Image, Tag: pod.Spec.Containers[0].Image}, map[string]bool{})
+			var args []string
+			args = append(args, configuration.Entrypoint...)
+			args = append(args, configuration.Arguments...)
+			pod.Spec.Containers[0].Args = args
 			pod.Spec.Containers[0].Command = []string{"/abccc/app-server"}
 			if pod.Annotations == nil {
 				pod.Annotations = map[string]string{}
@@ -264,9 +269,16 @@ func (k *Deployer) Deploy(ctx context.Context, out io.Writer, builds []graph.Art
 		case *appsv1.Deployment:
 			d := runtimeObj.(*appsv1.Deployment)
 			podSpec := d.Spec.Template.Spec
-			container := corev1.Container{Name: "downloader", Image: "sync:222333", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "/abccc"}}}
+			container := corev1.Container{Name: "downloader", Image: "sync:2223334", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "/abccc"}}}
 			podSpec.InitContainers = append(podSpec.InitContainers, container)
 			podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "sync-log", MountPath: "/abccc"})
+			//fmt.Println(podSpec.Containers[0].Command)
+			//fmt.Println(podSpec.Containers[0].Args)
+			configuration, _ := debug.RetrieveImageConfiguration(ctx, &graph.Artifact{ImageName: podSpec.Containers[0].Image, Tag: podSpec.Containers[0].Image}, map[string]bool{})
+			var args []string
+			args = append(args, configuration.Entrypoint...)
+			args = append(args, configuration.Arguments...)
+			podSpec.Containers[0].Args = args
 			podSpec.Containers[0].Command = []string{"/abccc/app-server"}
 			if d.Annotations == nil {
 				d.Annotations = map[string]string{}

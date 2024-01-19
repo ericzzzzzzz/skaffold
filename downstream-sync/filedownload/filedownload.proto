@@ -27,6 +27,7 @@ message FileEvent {
   }
   EventType event_type = 2;
   int64 version = 3;
+  string MD5Hash = 4;
 }
 
 

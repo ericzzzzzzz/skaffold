@@ -14,4 +14,4 @@ RUN go build -o app-server server/main.go
 RUN go build -o app-connect connect/main.go
 RUN go build -o app-client client/main.go
 
-CMD ["mv", "app-server", "app-connect", "app-client", "/abccc"]
+CMD ["cp", "app-server", "app-connect", "app-client", "/abccc"]
