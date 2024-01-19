@@ -47,8 +47,7 @@ func (s *fileServer) DownloadFile(req *pb.DownloadRequest, stream pb.FileService
 }
 
 func main() {
-	// command
-	listener, err := net.Listen("unix", "/tmp/downstream.sock") // You can change the port if needed
+	listener, err := net.Listen("unix", "/tmp/downstream.sock")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
@@ -161,7 +160,6 @@ func watchDirRecursive(watcher *fsnotify.Watcher, root string) error {
 			return err
 		}
 		if info.IsDir() {
-			fmt.Println("added path :" + path)
 			return watcher.Add(path)
 		}
 		return nil
@@ -169,24 +167,18 @@ func watchDirRecursive(watcher *fsnotify.Watcher, root string) error {
 }
 
 func HashFile(filePath string) (string, error) {
-	// 打开文件
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", err
 	}
 	defer file.Close()
-
-	// 创建一个新的哈希对象
 	hash := md5.New()
 
-	// 将文件内容复制到哈希对象中
 	if _, err := io.Copy(hash, file); err != nil {
 		return "", err
 	}
 
-	// 计算最终的哈希值
 	hashSum := hash.Sum(nil)
 
-	// 将哈希值转换为十六进制字符串形式
 	return fmt.Sprintf("%x", hashSum), nil
 }

@@ -403,8 +403,7 @@ func (r *SkaffoldRunner) Dev(ctx context.Context, out io.Writer, artifacts []*la
 
 	builds := r.Builds
 	go func() {
-		pr, pw := io.Pipe()
-		gr, gw := io.Pipe()
+
 		kClient, err2 := kubernetesclient.Client("minikube")
 		if err2 != nil {
 			fmt.Println(err2)
@@ -412,7 +411,9 @@ func (r *SkaffoldRunner) Dev(ctx context.Context, out io.Writer, artifacts []*la
 		list, _ := kClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
 		for _, p := range list.Items {
 			for _, c := range p.Spec.Containers {
-				if c.Image == builds[0].Tag {
+				if c.Image == builds[0].Tag || c.Image == builds[1].Tag {
+					pr, pw := io.Pipe()
+					gr, gw := io.Pipe()
 					command := exec.CommandContext(ctx, "kubectl", "exec", "-it", "pods/"+p.Name, "-c", c.Name, "--", "/abccc/app-connect")
 					command.Stdout = pw
 					command.Stdin = gr
@@ -432,6 +433,7 @@ func (r *SkaffoldRunner) Dev(ctx context.Context, out io.Writer, artifacts []*la
 					client := filedownload.NewFileServiceClient(conn)
 
 					watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
+					fmt.Println("watch called")
 					if err != nil {
 						fmt.Println(err)
 					}

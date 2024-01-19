@@ -19,7 +19,13 @@ package cmd
 import (
 	"context"
 	"errors"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/debug"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/graph"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/debugging"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/manifest"
 	"io"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 
 	"github.com/spf13/cobra"
 
@@ -68,6 +74,8 @@ func runDev(ctx context.Context, out io.Writer) error {
 				for _, cfg := range configs {
 					artifacts = append(artifacts, cfg.(*latest.SkaffoldConfig).Build.Artifacts...)
 				}
+
+				manifest.AddTransform(downloaderTransformer(ctx, artifacts))
 				err := r.Dev(ctx, out, artifacts)
 				manifestListByConfig := r.DeployManifests()
 
@@ -96,4 +104,63 @@ func runDev(ctx context.Context, out io.Writer) error {
 			}
 		}
 	}
+}
+
+func downloaderTransformer(ctx context.Context, artifacts []*latest.Artifact) manifest.Transform {
+
+	return func(l manifest.ManifestList, builds []graph.Artifact, registries manifest.Registries) (manifest.ManifestList, error) {
+		// if downloader defined
+		for i, m := range l {
+			runtimeObj, _, _ := debugging.DecodeFromYaml(m, nil, nil)
+
+			switch runtimeObj.(type) {
+			case *corev1.Pod:
+				pod := runtimeObj.(*corev1.Pod)
+				container := corev1.Container{Name: "downloader", Image: "sync:2223334", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "/abccc"}}}
+				pod.Spec.InitContainers = append(pod.Spec.InitContainers, container)
+
+				pod.Spec.Containers[0].VolumeMounts = append(pod.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "sync-log", MountPath: "/abccc"})
+				configuration, _ := debug.RetrieveImageConfiguration(ctx, &graph.Artifact{ImageName: pod.Spec.Containers[0].Image, Tag: pod.Spec.Containers[0].Image}, map[string]bool{})
+				var args []string
+				args = append(args, configuration.Entrypoint...)
+				args = append(args, configuration.Arguments...)
+				pod.Spec.Containers[0].Args = args
+				pod.Spec.Containers[0].Command = []string{"/abccc/app-server"}
+				if pod.Annotations == nil {
+					pod.Annotations = map[string]string{}
+				}
+				pod.Annotations["skaffold/downloader"] = "auto"
+				pod.Spec.Volumes = append(pod.Spec.Volumes, corev1.Volume{Name: "sync-log", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
+
+				yaml, _ := debugging.EncodeAsYaml(pod)
+				l[i] = yaml
+			case *appsv1.Deployment:
+				d := runtimeObj.(*appsv1.Deployment)
+				podSpec := d.Spec.Template.Spec
+				container := corev1.Container{Name: "downloader", Image: "sync:2223334", VolumeMounts: []corev1.VolumeMount{{Name: "sync-log", MountPath: "/abccc"}}}
+				podSpec.InitContainers = append(podSpec.InitContainers, container)
+				podSpec.Containers[0].VolumeMounts = append(podSpec.Containers[0].VolumeMounts, corev1.VolumeMount{Name: "sync-log", MountPath: "/abccc"})
+				//fmt.Println(podSpec.Containers[0].Command)
+				//fmt.Println(podSpec.Containers[0].Args)
+				configuration, _ := debug.RetrieveImageConfiguration(ctx, &graph.Artifact{ImageName: podSpec.Containers[0].Image, Tag: podSpec.Containers[0].Image}, map[string]bool{})
+				var args []string
+				args = append(args, configuration.Entrypoint...)
+				args = append(args, configuration.Arguments...)
+				podSpec.Containers[0].Args = args
+				podSpec.Containers[0].Command = []string{"/abccc/app-server"}
+				if d.Annotations == nil {
+					d.Annotations = map[string]string{}
+				}
+				d.Annotations["skaffold/downloader"] = "auto"
+				podSpec.Volumes = append(podSpec.Volumes, corev1.Volume{Name: "sync-log", VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}})
+				d.Spec.Template.Spec = podSpec
+
+				yaml, _ := debugging.EncodeAsYaml(d)
+				l[i] = yaml
+
+			}
+		}
+		return l, nil
+	}
+
 }
