@@ -30,6 +30,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/constants"
@@ -212,12 +213,9 @@ func (r *SkaffoldRunner) doDev(ctx context.Context, out io.Writer) error {
 		if err := r.deployer.GetDebugger().Start(childCtx); err != nil {
 			log.Entry(ctx).Warnf("failed to start debugger: %v", err)
 		}
-
 		builds := r.Builds
 		go func() {
-			time.Sleep(10 * time.Second)
-			pr, pw := io.Pipe()
-			gr, gw := io.Pipe()
+
 			kClient, err2 := kubernetesclient.Client("minikube")
 			if err2 != nil {
 				fmt.Println(err2)
@@ -225,7 +223,9 @@ func (r *SkaffoldRunner) doDev(ctx context.Context, out io.Writer) error {
 			list, _ := kClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
 			for _, p := range list.Items {
 				for _, c := range p.Spec.Containers {
-					if c.Image == builds[0].Tag {
+					if ds := getDownstreamSync(ctx, r.changeSet.needsRebuild, builds, c.Image); ds != nil {
+						pr, pw := io.Pipe()
+						gr, gw := io.Pipe()
 						command := exec.CommandContext(ctx, "kubectl", "exec", "-it", "pods/"+p.Name, "-c", c.Name, "--", "/abccc/app-connect")
 						command.Stdout = pw
 						command.Stdin = gr
@@ -245,6 +245,7 @@ func (r *SkaffoldRunner) doDev(ctx context.Context, out io.Writer) error {
 						client := filedownload.NewFileServiceClient(conn)
 
 						watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
+						fmt.Println("watch called")
 						if err != nil {
 							fmt.Println(err)
 						}
@@ -252,31 +253,56 @@ func (r *SkaffoldRunner) doDev(ctx context.Context, out io.Writer) error {
 						go func() {
 							for {
 								recv, err2 := watch.Recv()
-
 								if err2 != nil {
 									fmt.Println(err2)
 									return
 								}
-								file, err2 := client.DownloadFile(context.Background(), &filedownload.DownloadRequest{Path: recv.Path})
-								if err2 != nil {
-									fmt.Println(err2)
+
+								fmt.Println(recv)
+								for _, entry := range ds.Entry {
+
+									if !MatchDir(entry.Src, recv.Path) {
+										continue
+									}
+									rel, err2 := filepath.Rel(entry.Src, recv.Path)
+									if err2 != nil {
+										fmt.Println(err2)
+										continue
+									}
+
+									t := filepath.Join(entry.Dst, rel)
+									if v, ok := filemon.SyncedHash[t]; ok {
+										if v == recv.MD5Hash {
+											fmt.Println("File already synced.")
+											continue
+										}
+									}
+									fmt.Println("Syncing remote file to local")
+									filemon.SyncedHash[t] = recv.MD5Hash
+									fmt.Println(filemon.SyncedHash)
+
+									file, err2 := client.DownloadFile(context.Background(), &filedownload.DownloadRequest{Path: recv.Path})
+									if err2 != nil {
+										fmt.Println(err2)
+									}
+
+									os.MkdirAll(filepath.Dir(t), 0755)
+									create, err2 := os.Create(t)
+									if err2 != nil {
+										fmt.Println("failed to create")
+										fmt.Println(err2)
+									}
+									for {
+										response, err2 := file.Recv()
+										if err2 == io.EOF {
+											break
+										}
+										create.Write(response.Chunk)
+									}
+									create.Close()
+
 								}
 
-								rel, err2 := filepath.Rel("/aaa", recv.Path)
-								t := filepath.Join("/home/hangzzz/aa", rel)
-								fmt.Println("Download remote :: " + recv.Path + " to ::" + t)
-								create, err2 := os.Create(t)
-								if err2 != nil {
-									fmt.Println("failed to create")
-								}
-								for {
-									response, err2 := file.Recv()
-									if err2 == io.EOF {
-										break
-									}
-									create.Write(response.Chunk)
-								}
-								create.Close()
 							}
 						}()
 					}
@@ -411,7 +437,7 @@ func (r *SkaffoldRunner) Dev(ctx context.Context, out io.Writer, artifacts []*la
 		list, _ := kClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
 		for _, p := range list.Items {
 			for _, c := range p.Spec.Containers {
-				if c.Image == builds[0].Tag || c.Image == builds[1].Tag {
+				if ds := getDownstreamSync(ctx, artifacts, builds, c.Image); ds != nil {
 					pr, pw := io.Pipe()
 					gr, gw := io.Pipe()
 					command := exec.CommandContext(ctx, "kubectl", "exec", "-it", "pods/"+p.Name, "-c", c.Name, "--", "/abccc/app-connect")
@@ -446,37 +472,51 @@ func (r *SkaffoldRunner) Dev(ctx context.Context, out io.Writer, artifacts []*la
 								return
 							}
 
-							rel, err2 := filepath.Rel("/home/node/app", recv.Path)
-							t := filepath.Join("node/", rel)
-							if v, ok := filemon.SyncedHash[t]; ok {
-								if v == recv.MD5Hash {
-									fmt.Println("File already synced.")
+							fmt.Println(recv)
+							for _, entry := range ds.Entry {
+
+								if !MatchDir(entry.Src, recv.Path) {
 									continue
 								}
-							}
-							fmt.Println("Syncing remote file to local")
-							filemon.SyncedHash[t] = recv.MD5Hash
-							fmt.Println(filemon.SyncedHash)
-
-							file, err2 := client.DownloadFile(context.Background(), &filedownload.DownloadRequest{Path: recv.Path})
-							if err2 != nil {
-								fmt.Println(err2)
-							}
-
-							os.MkdirAll(filepath.Dir(t), 0755)
-							create, err2 := os.Create(t)
-							if err2 != nil {
-								fmt.Println("failed to create")
-								fmt.Println(err2)
-							}
-							for {
-								response, err2 := file.Recv()
-								if err2 == io.EOF {
-									break
+								rel, err2 := filepath.Rel(entry.Src, recv.Path)
+								if err2 != nil {
+									fmt.Println(err2)
+									continue
 								}
-								create.Write(response.Chunk)
+
+								t := filepath.Join(entry.Dst, rel)
+								if v, ok := filemon.SyncedHash[t]; ok {
+									if v == recv.MD5Hash {
+										fmt.Println("File already synced.")
+										continue
+									}
+								}
+								fmt.Println("Syncing remote file to local")
+								filemon.SyncedHash[t] = recv.MD5Hash
+								fmt.Println(filemon.SyncedHash)
+
+								file, err2 := client.DownloadFile(context.Background(), &filedownload.DownloadRequest{Path: recv.Path})
+								if err2 != nil {
+									fmt.Println(err2)
+								}
+
+								os.MkdirAll(filepath.Dir(t), 0755)
+								create, err2 := os.Create(t)
+								if err2 != nil {
+									fmt.Println("failed to create")
+									fmt.Println(err2)
+								}
+								for {
+									response, err2 := file.Recv()
+									if err2 == io.EOF {
+										break
+									}
+									create.Write(response.Chunk)
+								}
+								create.Close()
+
 							}
-							create.Close()
+
 						}
 					}()
 				}
@@ -610,4 +650,36 @@ func getTransposeGraph(artifacts []*latest.Artifact) devGraph {
 		}
 	}
 	return g
+}
+
+func getDownstreamSync(ctx context.Context, artifacts []*latest.Artifact, builds []graph.Artifact, containerImage string) *latest.DownstreamSync {
+
+	g := graph.ToArtifactGraph(artifacts)
+
+	for _, b := range builds {
+		if b.Tag != containerImage {
+			continue
+		}
+		if v, ok := g[b.ImageName]; ok {
+			return v.DownstreamSync
+		}
+	}
+	return nil
+}
+
+func MatchDir(targetDir string, changedDir string) bool {
+	list1 := strings.Split(targetDir, string(os.PathSeparator))
+	list2 := strings.Split(changedDir, string(os.PathSeparator))
+	fmt.Println(list1)
+	fmt.Println(list2)
+
+	if len(list1) > len(list2) {
+		return false
+	}
+	for i, ele := range list1 {
+		if list2[i] != ele {
+			return false
+		}
+	}
+	return true
 }

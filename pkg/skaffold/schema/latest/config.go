@@ -813,8 +813,6 @@ type KptDeploy struct {
 
 	// DefaultNamespace is the default namespace passed to kpt on deployment if no other override is given.
 	DefaultNamespace *string `yaml:"defaultNamespace,omitempty"`
-
-	DownstreamSync *DownstreamSync `yaml:"downstreamSync,omitempty"`
 }
 
 // DeployConfig contains all the configuration needed by the deploy steps.
@@ -1091,6 +1089,9 @@ type Artifact struct {
 
 	// RuntimeType specifies the target language runtime for this artifact that is used to configure debug support. Should be one of `go`, `nodejs`, `jvm`, `python` or `netcore`. If unspecified the language runtime is inferred from common heuristics for the list of supported runtimes.
 	RuntimeType string `yaml:"runtimeType,omitempty"`
+
+	// DownstreamSync *beta*
+	DownstreamSync *DownstreamSync `yaml:"download,omitempty"`
 }
 
 // Sync *beta* specifies what files to sync into the container.
@@ -1738,18 +1739,17 @@ type ResourceFilter struct {
 	PodSpec []string `yaml:"podSpec,omitempty"`
 }
 
-type DownstreamSyncTarget struct {
-	volume string `yaml:"volume" yamltags:"required"`
-}
-
 type DownstreamSyncEntry struct {
-	src      string   `yaml:"src" yamltags:"required"`
-	dst      string   `yaml:"dst" yamltags:"required"`
-	excludes []string `yaml:"excludes,omitempty"`
+	// Src relative path to the container workspace
+	Src string `yaml:"src" yamltags:"required"`
+	// Dst relative path to the artifact workspace
+	Dst string `yaml:"dst" yamltags:"required"`
 }
 
 type DownstreamSync struct {
-	targets []DownstreamSyncTarget `yaml:"targets,omitempty"`
+	Entry []DownstreamSyncEntry `yaml:"entry" yamltags:"required"`
+	// Excludes glob rules to exclude files from downstream sync
+	Excludes []string `yaml:"excludes,omitempty"`
 }
 
 // UnmarshalYAML provides a custom unmarshaller to deal with

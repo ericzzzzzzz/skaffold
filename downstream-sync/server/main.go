@@ -103,9 +103,17 @@ func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchS
 			if !ok {
 				return nil // Watcher closed
 			}
+			dir, err := os.Getwd()
+			if err != nil {
+				return fmt.Errorf("failed to watch %v", err)
+			}
+			relPath, err := filepath.Rel(dir, event.Name)
+			if err != nil {
+				return fmt.Errorf("failed to get relative path, path %s, working dir %s,  %v\n", event.Name, dir, err)
+			}
 
 			fileEvent := &pb.FileEvent{
-				Path:    event.Name,
+				Path:    relPath,
 				Version: 0,
 			}
 
