@@ -21,6 +21,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/download"
 	"io"
 	"os"
 	"path/filepath"
@@ -114,6 +115,11 @@ type Deployer struct {
 
 	transformableAllowlist map[apimachinery.GroupKind]latest.ResourceFilter
 	transformableDenylist  map[apimachinery.GroupKind]latest.ResourceFilter
+}
+
+func (h *Deployer) GetDownloader() download.Downloader {
+	//TODO implement me
+	panic("implement me")
 }
 
 func (h Deployer) ManifestOverrides() map[string]string {

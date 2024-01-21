@@ -18,6 +18,7 @@ package deploy
 
 import (
 	"context"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/download"
 	"io"
 	"strconv"
 
@@ -41,6 +42,11 @@ import (
 type DeployerMux struct {
 	iterativeStatusCheck bool
 	deployers            []Deployer
+}
+
+func (m DeployerMux) GetDownloader() download.Downloader {
+	//TODO implement me
+	panic("implement me")
 }
 
 type deployerWithHooks interface {

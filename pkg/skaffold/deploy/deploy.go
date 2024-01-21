@@ -22,6 +22,7 @@ import (
 
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/access"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/debug"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/download"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/graph"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/manifest"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/log"
@@ -54,6 +55,8 @@ type Deployer interface {
 
 	// GetSyncer returns a Deployer's implementation of a Syncer
 	GetSyncer() sync.Syncer
+
+	GetDownloader() download.Downloader
 
 	// TrackBuildArtifacts registers build artifacts to be tracked by a Deployer
 	TrackBuildArtifacts(builds, deployedImages []graph.Artifact)

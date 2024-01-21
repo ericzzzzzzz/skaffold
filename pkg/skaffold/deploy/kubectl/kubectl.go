@@ -19,6 +19,7 @@ package kubectl
 import (
 	"context"
 	"fmt"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/download"
 	"github.com/segmentio/textio"
 	"go.opentelemetry.io/otel/trace"
 	"io"
@@ -80,6 +81,11 @@ type Deployer struct {
 
 	transformableAllowlist map[apimachinery.GroupKind]latest.ResourceFilter
 	transformableDenylist  map[apimachinery.GroupKind]latest.ResourceFilter
+}
+
+func (k *Deployer) GetDownloader() download.Downloader {
+	//TODO implement me
+	panic("implement me")
 }
 
 // NewDeployer returns a new Deployer for a DeployConfig filled

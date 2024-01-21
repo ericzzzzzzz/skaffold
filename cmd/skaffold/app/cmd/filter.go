@@ -115,6 +115,18 @@ func runFilter(ctx context.Context, out io.Writer, debuggingFilters bool, postRe
 			return err
 		}
 
+		var artifacts []*latest.Artifact
+		for _, cfg := range configs {
+			artifacts = append(artifacts, cfg.(*latest.SkaffoldConfig).Build.Artifacts...)
+		}
+
+		manifestList, err = downloaderTransformer(ctx, artifacts)(manifestList, buildArtifacts, manifest.Registries{})
+		fmt.Println(manifestList)
+
+		if err != nil {
+			return err
+		}
+
 		if debuggingFilters {
 			// TODO(bdealwis): refactor this code
 			debugHelpersRegistry, err := config.GetDebugHelpersRegistry(opts.GlobalConfig)

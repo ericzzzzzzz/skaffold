@@ -111,7 +111,6 @@ func downloaderTransformer(ctx context.Context, artifacts []*latest.Artifact) ma
 
 	return func(l manifest.ManifestList, builds []graph.Artifact, registries manifest.Registries) (manifest.ManifestList, error) {
 		artifactGraph := graph.ToArtifactGraph(artifacts)
-		fmt.Println(builds)
 		for _, b := range builds {
 			if v, ok := artifactGraph[b.ImageName]; ok {
 				if v.DownstreamSync == nil {

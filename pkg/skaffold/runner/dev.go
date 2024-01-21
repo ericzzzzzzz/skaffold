@@ -118,6 +118,7 @@ func (r *SkaffoldRunner) doDev(ctx context.Context, out io.Writer) error {
 	}
 
 	var bRes []graph.Artifact
+	artifactsToRebuild := r.changeSet.NeedsRebuild()
 	if needsBuild {
 		childCtx, endTrace := instrumentation.StartTrace(ctx, "doDev_needsBuild")
 		event.ResetStateOnBuild()
@@ -223,7 +224,7 @@ func (r *SkaffoldRunner) doDev(ctx context.Context, out io.Writer) error {
 			list, _ := kClient.CoreV1().Pods("default").List(ctx, metav1.ListOptions{})
 			for _, p := range list.Items {
 				for _, c := range p.Spec.Containers {
-					if ds := getDownstreamSync(ctx, r.changeSet.needsRebuild, builds, c.Image); ds != nil {
+					if ds := getDownstreamSync(ctx, artifactsToRebuild, builds, c.Image); ds != nil {
 						pr, pw := io.Pipe()
 						gr, gw := io.Pipe()
 						command := exec.CommandContext(ctx, "kubectl", "exec", "-it", "pods/"+p.Name, "-c", c.Name, "--", "/abccc/app-connect")
@@ -668,6 +669,9 @@ func getDownstreamSync(ctx context.Context, artifacts []*latest.Artifact, builds
 }
 
 func MatchDir(targetDir string, changedDir string) bool {
+	if targetDir == "." {
+		return true
+	}
 	list1 := strings.Split(targetDir, string(os.PathSeparator))
 	list2 := strings.Split(changedDir, string(os.PathSeparator))
 	fmt.Println(list1)

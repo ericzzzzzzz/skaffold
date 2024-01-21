@@ -1,4 +1,4 @@
-apiVersion: skaffold/v4beta8
+apiVersion: skaffold/v4beta9
 kind: Config
 build:
   artifacts:
@@ -6,6 +6,10 @@ build:
     buildpacks:
       env:
       - GOOGLE_RUNTIME_VERSION=8
+    download:
+      entry:
+        - src: "."
+          dst: "."
 profiles:
 - name: gcb
   build:
