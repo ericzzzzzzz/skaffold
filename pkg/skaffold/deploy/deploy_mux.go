@@ -45,8 +45,11 @@ type DeployerMux struct {
 }
 
 func (m DeployerMux) GetDownloader() download.Downloader {
-	//TODO implement me
-	panic("implement me")
+	var downloaders download.DownloaderMux
+	for _, d := range m.GetDeployers() {
+		downloaders = append(downloaders, d.GetDownloader())
+	}
+	return downloaders
 }
 
 type deployerWithHooks interface {

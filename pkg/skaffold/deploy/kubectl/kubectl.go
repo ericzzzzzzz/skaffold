@@ -64,6 +64,7 @@ type Deployer struct {
 	debugger            debug.Debugger
 	statusMonitor       kstatus.Monitor
 	syncer              sync.Syncer
+	downloader          download.Downloader
 	hookRunner          hooks.Runner
 	originalImages      []graph.Artifact // the set of images parsed from the Deployer's manifest set
 	localImages         []graph.Artifact // the set of images marked as "local" by the Runner
@@ -84,8 +85,7 @@ type Deployer struct {
 }
 
 func (k *Deployer) GetDownloader() download.Downloader {
-	//TODO implement me
-	panic("implement me")
+	return k.downloader
 }
 
 // NewDeployer returns a new Deployer for a DeployConfig filled
@@ -135,6 +135,7 @@ func NewDeployer(cfg Config, labeller *label.DefaultLabeller, d *latest.KubectlD
 		KubectlDeploy:       d,
 		podSelector:         podSelector,
 		namespaces:          &namespaces,
+		downloader:          download.NewKubernetesDownloader(artifacts, kubectl.CLI),
 		accessor:            component.NewAccessor(cfg, cfg.GetKubeContext(), kubectl.CLI, podSelector, labeller, &namespaces),
 		debugger:            component.NewDebugger(cfg.Mode(), podSelector, &namespaces, cfg.GetKubeContext()),
 		imageLoader:         component.NewImageLoader(cfg, kubectl.CLI),

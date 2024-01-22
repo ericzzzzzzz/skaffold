@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 )
 
 type fileServer struct {
@@ -120,12 +121,19 @@ func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchS
 			switch {
 			case event.Op&fsnotify.Create == fsnotify.Create:
 				fileEvent.EventType = pb.FileEvent_CREATE
+				fmt.Println("balaba")
+				if ignore(event.Name) {
+					fmt.Println("ignore...")
+					continue
+				}
+
 				stat, err := os.Stat(fileEvent.Path)
 				if err != nil {
 					fmt.Println(err)
-					if stat.IsDir() {
-						s.watcher.Add(stat.Name())
-					}
+					continue
+				}
+				if stat.IsDir() {
+					s.watcher.Add(stat.Name())
 				}
 			case event.Op&fsnotify.Write == fsnotify.Write:
 				fileEvent.EventType = pb.FileEvent_MODIFY
@@ -168,6 +176,9 @@ func watchDirRecursive(watcher *fsnotify.Watcher, root string) error {
 			return err
 		}
 		if info.IsDir() {
+			if strings.HasPrefix(path, "/proc/") {
+				return filepath.SkipDir
+			}
 			return watcher.Add(path)
 		}
 		return nil
@@ -189,4 +200,13 @@ func HashFile(filePath string) (string, error) {
 	hashSum := hash.Sum(nil)
 
 	return fmt.Sprintf("%x", hashSum), nil
+}
+
+func ignore(path string) bool {
+	if strings.HasPrefix(path, "/proc/") {
+		return true
+	}
+
+	return false
+
 }

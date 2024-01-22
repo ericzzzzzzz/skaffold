@@ -95,7 +95,6 @@ func runFilter(ctx context.Context, out io.Writer, debuggingFilters bool, postRe
 		}
 		var ass applysetters.ApplySetters
 		manifestOverrides := pkgutil.EnvSliceToMap(opts.ManifestsOverrides, "=")
-		fmt.Println(manifestOverrides)
 		for k, v := range manifestOverrides {
 			ass.Setters = append(ass.Setters, applysetters.Setter{Name: k, Value: v})
 		}
@@ -121,7 +120,7 @@ func runFilter(ctx context.Context, out io.Writer, debuggingFilters bool, postRe
 		}
 
 		manifestList, err = downloaderTransformer(ctx, artifacts)(manifestList, buildArtifacts, manifest.Registries{})
-		fmt.Println(manifestList)
+		fmt.Println(manifestList.String())
 
 		if err != nil {
 			return err

@@ -19,7 +19,6 @@ package cmd
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/spf13/cobra"
@@ -175,7 +174,6 @@ func downloaderTransformer(ctx context.Context, artifacts []*latest.Artifact) ma
 				}
 			}
 		}
-		fmt.Println("transformed L " + l.String())
 
 		return l, nil
 	}

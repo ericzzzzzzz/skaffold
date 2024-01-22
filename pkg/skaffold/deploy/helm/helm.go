@@ -88,6 +88,7 @@ type Deployer struct {
 	statusMonitor status.Monitor
 	syncer        sync.Syncer
 	hookRunner    hooks.Runner
+	downloader    download.Downloader
 
 	podSelector    *kubernetes.ImageList
 	originalImages []graph.Artifact // the set of images defined in ArtifactOverrides
@@ -118,8 +119,7 @@ type Deployer struct {
 }
 
 func (h *Deployer) GetDownloader() download.Downloader {
-	//TODO implement me
-	panic("implement me")
+	return h.downloader
 }
 
 func (h Deployer) ManifestOverrides() map[string]string {
@@ -184,6 +184,7 @@ func NewDeployer(ctx context.Context, cfg Config, labeller *label.DefaultLabelle
 		accessor:               component.NewAccessor(cfg, cfg.GetKubeContext(), kubectl, podSelector, labeller, &namespaces),
 		debugger:               component.NewDebugger(cfg.Mode(), podSelector, &namespaces, cfg.GetKubeContext()),
 		imageLoader:            component.NewImageLoader(cfg, kubectl),
+		downloader:             download.NewKubernetesDownloader(artifacts, kubectl),
 		logger:                 logger,
 		statusMonitor:          component.NewMonitor(cfg, cfg.GetKubeContext(), labeller, &namespaces, customResourceSelectors),
 		syncer:                 component.NewSyncer(kubectl, &namespaces, logger.GetFormatter()),
