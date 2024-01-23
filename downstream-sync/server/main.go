@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	pb "downstream-sync/filedownload"
 	"fmt"
+	"github.com/bmatcuk/doublestar"
 	"github.com/fsnotify/fsnotify"
 	"google.golang.org/grpc"
 	"io"
@@ -48,7 +49,7 @@ func (s *fileServer) DownloadFile(req *pb.DownloadRequest, stream pb.FileService
 }
 
 func main() {
-	listener, err := net.Listen("unix", "/tmp/downstream.sock")
+	listener, err := net.Listen("unix", "/abccc/downstream.sock")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
 	}
@@ -65,7 +66,6 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to get : %v", err)
 	}
-	fmt.Println("working dir::" + dir)
 
 	err = watchDirRecursive(s.watcher, dir)
 	if err != nil {
@@ -96,8 +96,8 @@ func main() {
 }
 
 func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchServer) error {
-	fmt.Println("received request..")
 
+Skip:
 	for {
 		select {
 		case event, ok := <-s.watcher.Events:
@@ -121,15 +121,15 @@ func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchS
 			switch {
 			case event.Op&fsnotify.Create == fsnotify.Create:
 				fileEvent.EventType = pb.FileEvent_CREATE
-				if ignore(event.Name) {
-					fmt.Println("ignore...")
-					continue
+				if ignore(re.Excludes, event.Name) {
+					fmt.Println("ignoreeeeee")
+					continue Skip
 				}
 
 				stat, err := os.Stat(fileEvent.Path)
 				if err != nil {
 					fmt.Println(err)
-					continue
+					continue Skip
 				}
 				if stat.IsDir() {
 					s.watcher.Add(stat.Name())
@@ -138,7 +138,7 @@ func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchS
 				fileEvent.EventType = pb.FileEvent_MODIFY
 				h, err := HashFile(event.Name)
 				if err != nil {
-					continue
+					continue Skip
 				}
 				fileEvent.MD5Hash = h
 			case event.Op&fsnotify.Remove == fsnotify.Remove:
@@ -175,10 +175,9 @@ func watchDirRecursive(watcher *fsnotify.Watcher, root string) error {
 			return err
 		}
 		if info.IsDir() {
-			if ignore(path) {
+			if ignore(nil, path) {
 				return filepath.SkipDir
 			}
-			fmt.Println("adding " + path + " to watcher")
 			return watcher.Add(path)
 		}
 		return nil
@@ -202,7 +201,7 @@ func HashFile(filePath string) (string, error) {
 	return fmt.Sprintf("%x", hashSum), nil
 }
 
-func ignore(path string) bool {
+func ignore(excludes []string, path string) bool {
 	prefixes := []string{"/proc/", "/sys/", "/dev/", "/etc/", "/lib/", "/var/", "/usr/", "/run/", "/tmp/"}
 	for _, prefix := range prefixes {
 		if strings.HasPrefix(path, prefix) {
@@ -210,6 +209,32 @@ func ignore(path string) bool {
 		}
 		if path == prefix[:len(prefix)-1] {
 			return true
+		}
+	}
+
+	dir, err2 := os.Getwd()
+	if err2 != nil {
+		fmt.Println(err2)
+		return false
+	}
+	rel, err := filepath.Rel(dir, path)
+
+	if err != nil {
+		fmt.Println(err)
+		return false
+	}
+	for _, ex := range excludes {
+		ok, err := doublestar.Match(ex, rel)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		if ok {
+			fmt.Println("ignoring due to rule: " + ex)
+			return ok
+		} else {
+			fmt.Println("Not ignoring due to rule: " + ex + "rel: " + rel)
+
 		}
 	}
 	return false

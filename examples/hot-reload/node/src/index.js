@@ -2,10 +2,7 @@ const express = require('express')
 const app = express()
 const port = 3000
 
-app.get('/', (req, res) => res.send('Hellaaaaao aaaaaa222aaaaaaaWaaaaaaoraald!'))
+app.get('/', (req, res) => res.send('Hel222laaaaao lll!'))
 
 app.listen(port, () => console.log(`Example app listening on port ${port}!`))
-// 123
-
-// 3333
-//ssss
+// sss

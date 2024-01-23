@@ -5,8 +5,8 @@ build:
   - image: skaffold-helm
     download:
       entry:
-        - src: "."
-          dst: "."
+        - remoteSrc: "."
+          localDst: "."
 deploy:
   helm:
     releases:

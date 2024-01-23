@@ -43,7 +43,6 @@ func (kd KubernetesDownloader) Start(ctx context.Context, builds []graph.Artifac
 					command.Stdout = pw
 					command.Stdin = gr
 					err := command.Start()
-					fmt.Println(command.Args)
 					if err != nil {
 						fmt.Println("failed to connect the remote ")
 						fmt.Println(err)
@@ -57,8 +56,7 @@ func (kd KubernetesDownloader) Start(ctx context.Context, builds []graph.Artifac
 
 					client := filedownload.NewFileServiceClient(conn)
 
-					watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{})
-					fmt.Println("watch called")
+					watch, err := client.Watch(ctx, &filedownload.FileWatchRequest{Excludes: ds.Excludes})
 					if err != nil {
 						fmt.Println(err)
 					}
@@ -74,16 +72,16 @@ func (kd KubernetesDownloader) Start(ctx context.Context, builds []graph.Artifac
 							fmt.Println(recv)
 							for _, entry := range ds.Entry {
 
-								if !MatchDir(entry.Src, recv.Path) {
+								if !MatchDir(entry.RemoteSrc, recv.Path) {
 									continue
 								}
-								rel, err2 := filepath.Rel(entry.Src, recv.Path)
+								rel, err2 := filepath.Rel(entry.RemoteSrc, recv.Path)
 								if err2 != nil {
 									fmt.Println(err2)
 									continue
 								}
 
-								t := filepath.Join(entry.Dst, rel)
+								t := filepath.Join(entry.LocalDst, rel)
 								if v, ok := filemon.SyncedHash[t]; ok {
 									if v == recv.MD5Hash {
 										fmt.Println("File already synced.")

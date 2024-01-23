@@ -27,8 +27,10 @@ profiles:
             dest: .
         download:
           entry:
-            - src: "src"
-              dst: "node/abc"
+            - remoteSrc: "src"
+              localDst: "node/src"
+          excludes:
+            - "node_modules/*"
       - image: python-reload
         context: python
         docker:

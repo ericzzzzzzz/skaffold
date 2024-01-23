@@ -3,6 +3,7 @@ module downstream-sync
 go 1.21.0
 
 require (
+	github.com/bmatcuk/doublestar v1.3.4
 	github.com/fsnotify/fsnotify v1.7.0
 	google.golang.org/grpc v1.60.1
 	google.golang.org/protobuf v1.32.0

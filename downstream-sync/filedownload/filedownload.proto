@@ -31,4 +31,6 @@ message FileEvent {
 }
 
 
-message FileWatchRequest { }
+message FileWatchRequest {
+  repeated string excludes = 1;
+}

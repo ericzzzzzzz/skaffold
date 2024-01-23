@@ -8,7 +8,7 @@ import (
 
 func main() {
 
-	sockPath := "/tmp/downstream.sock"
+	sockPath := "/abccc/downstream.sock"
 
 	conn, err := net.Dial("unix", sockPath)
 	if err != nil {

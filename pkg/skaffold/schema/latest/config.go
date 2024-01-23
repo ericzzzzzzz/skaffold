@@ -1760,10 +1760,10 @@ type ResourceFilter struct {
 }
 
 type DownstreamSyncEntry struct {
-	// Src relative path to the container workspace
-	Src string `yaml:"src" yamltags:"required"`
-	// Dst relative path to the artifact workspace
-	Dst string `yaml:"dst" yamltags:"required"`
+	// RemoteSrc relative path to the container workspace
+	RemoteSrc string `yaml:"remoteSrc" yamltags:"required"`
+	// LocalDst relative path to the skaffold workspace at the moment
+	LocalDst string `yaml:"localDst" yamltags:"required"`
 }
 
 type DownstreamSync struct {
