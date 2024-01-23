@@ -121,7 +121,6 @@ func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchS
 			switch {
 			case event.Op&fsnotify.Create == fsnotify.Create:
 				fileEvent.EventType = pb.FileEvent_CREATE
-				fmt.Println("balaba")
 				if ignore(event.Name) {
 					fmt.Println("ignore...")
 					continue
@@ -176,9 +175,10 @@ func watchDirRecursive(watcher *fsnotify.Watcher, root string) error {
 			return err
 		}
 		if info.IsDir() {
-			if strings.HasPrefix(path, "/proc/") {
+			if ignore(path) {
 				return filepath.SkipDir
 			}
+			fmt.Println("adding " + path + " to watcher")
 			return watcher.Add(path)
 		}
 		return nil
@@ -203,10 +203,15 @@ func HashFile(filePath string) (string, error) {
 }
 
 func ignore(path string) bool {
-	if strings.HasPrefix(path, "/proc/") {
-		return true
+	prefixes := []string{"/proc/", "/sys/", "/dev/", "/etc/", "/lib/", "/var/", "/usr/", "/run/", "/tmp/"}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+		if path == prefix[:len(prefix)-1] {
+			return true
+		}
 	}
-
 	return false
 
 }
