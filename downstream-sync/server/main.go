@@ -116,11 +116,11 @@ func main() {
 func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchServer) error {
 	fmt.Println("The following folders are being watched")
 	for _, target := range targets {
-		fmt.Println(target)
+		fmt.Println("  - " + target)
 	}
 	fmt.Println("Excludes:")
 	for _, ex := range excludes {
-		fmt.Println(ex)
+		fmt.Println("  - " + ex)
 	}
 
 Skip:
