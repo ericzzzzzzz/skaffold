@@ -80,14 +80,12 @@ func executeApp(cmd *cobra.Command, args []string) {
 	grpcServer := grpc.NewServer()
 	for _, target := range targets {
 		if err := watchDirRecursive(s.watcher, target); err != nil {
-			fmt.Println("failed to watch...")
+			fmt.Printf("failed to watch path: %s, err: %v \n", target, err)
 			continue
 		}
 	}
 
 	pb.RegisterFileServiceServer(grpcServer, &s)
-
-	fmt.Printf("Server listening at %v\n", listener.Addr())
 
 	if err := grpcServer.Serve(listener); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
