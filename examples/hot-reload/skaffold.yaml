@@ -29,8 +29,11 @@ profiles:
           entry:
             - remoteSrc: "src"
               localDst: "node/src"
+            - remoteSrc: "abc"
+              localDst: "node/abc"
           excludes:
             - "node_modules/*"
+            - "abc/bb.js"
       - image: python-reload
         context: python
         docker:

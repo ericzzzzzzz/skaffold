@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/bmatcuk/doublestar"
 	"github.com/fsnotify/fsnotify"
+	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"io"
 	"log"
@@ -14,6 +15,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+)
+
+var (
+	command  []string
+	targets  []string
+	excludes []string
 )
 
 type fileServer struct {
@@ -48,7 +55,7 @@ func (s *fileServer) DownloadFile(req *pb.DownloadRequest, stream pb.FileService
 	return nil
 }
 
-func main() {
+func executeApp(cmd *cobra.Command, args []string) {
 	listener, err := net.Listen("unix", "/abccc/downstream.sock")
 	if err != nil {
 		log.Fatalf("Failed to listen: %v", err)
@@ -71,15 +78,10 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to watch: %v", err)
 	}
-	args := os.Args
-	var subProcessArs []string
-	if len(args) > 2 {
-		subProcessArs = args[2:]
-	}
 
-	command := exec.Command(args[1], subProcessArs...)
-	command.Stdout = os.Stdout
-	command.Start()
+	containerCmd := exec.Command(command[0], command[1:]...)
+	containerCmd.Stdout = os.Stdout
+	containerCmd.Start()
 	if err != nil {
 		fmt.Println("failed to start app")
 		fmt.Println(err)
@@ -87,15 +89,45 @@ func main() {
 	}
 
 	grpcServer := grpc.NewServer()
+	for _, target := range targets {
+		if err := watchDirRecursive(s.watcher, target); err != nil {
+			fmt.Println("failed to watch...")
+			continue
+		}
+	}
+
 	pb.RegisterFileServiceServer(grpcServer, &s)
 
 	fmt.Printf("Server listening at %v\n", listener.Addr())
+
 	if err := grpcServer.Serve(listener); err != nil {
 		log.Fatalf("Failed to serve: %v", err)
 	}
+
+}
+func main() {
+	var rootCmd = &cobra.Command{
+		Use:   "app-server",
+		Short: "",
+		Long:  `...`,
+		Run:   executeApp,
+	}
+
+	rootCmd.PersistentFlags().StringSliceVar(&command, "command", []string{}, "List of proxied strings")
+	rootCmd.PersistentFlags().StringSliceVar(&targets, "targets", []string{}, "List of target strings")
+	rootCmd.PersistentFlags().StringSliceVar(&excludes, "excludes", []string{}, "List of strings to exclude")
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
 }
 
 func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchServer) error {
+	fmt.Println(targets)
+	fmt.Println(command)
+	fmt.Println(excludes)
 
 Skip:
 	for {
@@ -104,25 +136,17 @@ Skip:
 			if !ok {
 				return nil // Watcher closed
 			}
-			dir, err := os.Getwd()
-			if err != nil {
-				return fmt.Errorf("failed to watch %v", err)
-			}
-			relPath, err := filepath.Rel(dir, event.Name)
-			if err != nil {
-				return fmt.Errorf("failed to get relative path, path %s, working dir %s,  %v\n", event.Name, dir, err)
-			}
+
+			fmt.Println("event Name:" + event.Name)
 
 			fileEvent := &pb.FileEvent{
-				Path:    relPath,
+				Path:    event.Name,
 				Version: 0,
 			}
-
 			switch {
 			case event.Op&fsnotify.Create == fsnotify.Create:
 				fileEvent.EventType = pb.FileEvent_CREATE
-				if ignore(re.Excludes, event.Name) {
-					fmt.Println("ignoreeeeee")
+				if ignore(excludes, event.Name) {
 					continue Skip
 				}
 
@@ -136,6 +160,9 @@ Skip:
 				}
 			case event.Op&fsnotify.Write == fsnotify.Write:
 				fileEvent.EventType = pb.FileEvent_MODIFY
+				if ignore(excludes, event.Name) {
+					continue Skip
+				}
 				h, err := HashFile(event.Name)
 				if err != nil {
 					continue Skip
@@ -154,6 +181,7 @@ Skip:
 			if err := stream.Send(fileEvent); err != nil {
 				return fmt.Errorf("failed to send event: %v", err)
 			}
+			fmt.Printf("Sending file to %v\n", fileEvent)
 
 		case err, ok := <-s.watcher.Errors:
 			if !ok {
@@ -175,7 +203,8 @@ func watchDirRecursive(watcher *fsnotify.Watcher, root string) error {
 			return err
 		}
 		if info.IsDir() {
-			if ignore(nil, path) {
+			if ignore(excludes, path) {
+				fmt.Println("path is relative path : " + path)
 				return filepath.SkipDir
 			}
 			return watcher.Add(path)
@@ -212,29 +241,14 @@ func ignore(excludes []string, path string) bool {
 		}
 	}
 
-	dir, err2 := os.Getwd()
-	if err2 != nil {
-		fmt.Println(err2)
-		return false
-	}
-	rel, err := filepath.Rel(dir, path)
-
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
 	for _, ex := range excludes {
-		ok, err := doublestar.Match(ex, rel)
+		ok, err := doublestar.Match(ex, path)
 		if err != nil {
 			fmt.Println(err)
 			continue
 		}
 		if ok {
-			fmt.Println("ignoring due to rule: " + ex)
 			return ok
-		} else {
-			fmt.Println("Not ignoring due to rule: " + ex + "rel: " + rel)
-
 		}
 	}
 	return false

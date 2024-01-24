@@ -19,11 +19,11 @@ package cmd
 import (
 	"context"
 	"errors"
-	"io"
-
 	"github.com/spf13/cobra"
+	"io"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"strings"
 
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/debug"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/graph"
@@ -131,8 +131,20 @@ func downloaderTransformer(ctx context.Context, artifacts []*latest.Artifact) ma
 							pod.Spec.Containers[j].VolumeMounts = append(pod.Spec.Containers[j].VolumeMounts, corev1.VolumeMount{Name: "sync-log", MountPath: "/abccc"})
 							configuration, _ := debug.RetrieveImageConfiguration(ctx, &graph.Artifact{ImageName: pod.Spec.Containers[j].Image, Tag: pod.Spec.Containers[j].Image}, map[string]bool{})
 							var args []string
-							args = append(args, configuration.Entrypoint...)
-							args = append(args, configuration.Arguments...)
+							var containerCmd []string
+							containerCmd = append(containerCmd, configuration.Entrypoint...)
+							containerCmd = append(containerCmd, configuration.Arguments...)
+							args = append(args, "--command", strings.Join(containerCmd, ","))
+
+							var targets []string
+							for _, entry := range v.DownstreamSync.Entry {
+								targets = append(targets, entry.RemoteSrc)
+							}
+							args = append(args, "--targets", strings.Join(targets, ","))
+
+							excludes := v.DownstreamSync.Excludes
+							args = append(args, "--excludes", strings.Join(excludes, ","))
+
 							pod.Spec.Containers[j].Args = args
 							pod.Spec.Containers[j].Command = []string{"/abccc/app-server"}
 							if pod.Annotations == nil {
@@ -156,8 +168,20 @@ func downloaderTransformer(ctx context.Context, artifacts []*latest.Artifact) ma
 							podSpec.Containers[j].VolumeMounts = append(podSpec.Containers[j].VolumeMounts, corev1.VolumeMount{Name: "sync-log", MountPath: "/abccc"})
 							configuration, _ := debug.RetrieveImageConfiguration(ctx, &graph.Artifact{ImageName: podSpec.Containers[0].Image, Tag: podSpec.Containers[0].Image}, map[string]bool{})
 							var args []string
-							args = append(args, configuration.Entrypoint...)
-							args = append(args, configuration.Arguments...)
+							var containerCmd []string
+							containerCmd = append(containerCmd, configuration.Entrypoint...)
+							containerCmd = append(containerCmd, configuration.Arguments...)
+							args = append(args, "--command", strings.Join(containerCmd, ","))
+
+							var targets []string
+							for _, entry := range v.DownstreamSync.Entry {
+								targets = append(targets, entry.RemoteSrc)
+							}
+							args = append(args, "--targets", strings.Join(targets, ","))
+
+							excludes := v.DownstreamSync.Excludes
+							args = append(args, "--excludes", strings.Join(excludes, ","))
+
 							podSpec.Containers[j].Args = args
 							podSpec.Containers[j].Command = []string{"/abccc/app-server"}
 							if d.Annotations == nil {

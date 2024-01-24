@@ -69,7 +69,6 @@ func (kd KubernetesDownloader) Start(ctx context.Context, builds []graph.Artifac
 								return
 							}
 
-							fmt.Println(recv)
 							for _, entry := range ds.Entry {
 
 								if !MatchDir(entry.RemoteSrc, recv.Path) {
@@ -149,8 +148,6 @@ func MatchDir(targetDir string, changedDir string) bool {
 	}
 	list1 := strings.Split(filepath.Clean(targetDir), string(os.PathSeparator))
 	list2 := strings.Split(filepath.Clean(changedDir), string(os.PathSeparator))
-	fmt.Println(list1)
-	fmt.Println(list2)
 
 	if len(list1) > len(list2) {
 		return false
