@@ -50,6 +50,7 @@ func (h mockClient) ManifestOverrides() map[string]string {
 }
 
 func (h mockClient) EnableDebug() bool           { return h.enableDebug }
+func (h mockClient) EnableDownloader() bool      { return false }
 func (h mockClient) OverrideProtocols() []string { return h.overrideProtocols }
 func (h mockClient) ConfigFile() string          { return h.configFile }
 func (h mockClient) KubeContext() string         { return h.kubeContext }

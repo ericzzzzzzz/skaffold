@@ -59,7 +59,9 @@ type Helm struct {
 	transformDenylist  map[apimachinery.GroupKind]latest.ResourceFilter
 }
 
-func (h Helm) EnableDebug() bool           { return h.enableDebug }
+func (h Helm) EnableDebug() bool { return h.enableDebug }
+
+func (h Helm) EnableDownloader() bool      { return false }
 func (h Helm) OverrideProtocols() []string { return h.overrideProtocols }
 func (h Helm) ConfigFile() string          { return h.configFile }
 func (h Helm) KubeContext() string         { return h.kubeContext }

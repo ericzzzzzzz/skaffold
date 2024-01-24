@@ -89,6 +89,7 @@ type Deployer struct {
 	syncer        sync.Syncer
 	hookRunner    hooks.Runner
 	downloader    download.Downloader
+	dev           bool
 
 	podSelector    *kubernetes.ImageList
 	originalImages []graph.Artifact // the set of images defined in ArtifactOverrides
@@ -126,7 +127,9 @@ func (h Deployer) ManifestOverrides() map[string]string {
 	return map[string]string{}
 }
 
-func (h Deployer) EnableDebug() bool           { return h.enableDebug }
+func (h Deployer) EnableDebug() bool { return h.enableDebug }
+
+func (h Deployer) EnableDownloader() bool      { return h.dev }
 func (h Deployer) OverrideProtocols() []string { return h.overrideProtocols }
 func (h Deployer) ConfigFile() string          { return h.configFile }
 func (h Deployer) KubeContext() string         { return h.kubeContext }
@@ -200,6 +203,7 @@ func NewDeployer(ctx context.Context, cfg Config, labeller *label.DefaultLabelle
 		bV:                     hv,
 		enableDebug:            cfg.Mode() == config.RunModes.Debug,
 		overrideProtocols:      debug.Protocols,
+		dev:                    cfg.Mode() == config.RunModes.Dev,
 		isMultiConfig:          cfg.IsMultiConfig(),
 		transformableAllowlist: transformableAllowlist,
 		transformableDenylist:  transformableDenylist,

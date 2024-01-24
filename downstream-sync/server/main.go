@@ -131,8 +131,6 @@ Skip:
 				return nil // Watcher closed
 			}
 
-			fmt.Println("event Name:" + event.Name)
-
 			fileEvent := &pb.FileEvent{
 				Path:    event.Name,
 				Version: 0,
@@ -175,7 +173,6 @@ Skip:
 			if err := stream.Send(fileEvent); err != nil {
 				return fmt.Errorf("failed to send event: %v", err)
 			}
-			fmt.Printf("Sending file to %v\n", fileEvent)
 
 		case err, ok := <-s.watcher.Errors:
 			if !ok {
@@ -198,7 +195,6 @@ func watchDirRecursive(watcher *fsnotify.Watcher, root string) error {
 		}
 		if info.IsDir() {
 			if ignore(excludes, path) {
-				fmt.Println("path is relative path : " + path)
 				return filepath.SkipDir
 			}
 			return watcher.Add(path)
@@ -225,12 +221,12 @@ func HashFile(filePath string) (string, error) {
 }
 
 func ignore(excludes []string, path string) bool {
-	prefixes := []string{"/proc/", "/sys/", "/dev/", "/etc/", "/lib/", "/var/", "/usr/", "/run/", "/tmp/"}
+	prefixes := []string{"/proc/", "/sys/", "/dev/", "/etc/", "/lib/", "/usr/", "/run/", "/tmp/"}
 	for _, prefix := range prefixes {
-		if strings.HasPrefix(path, prefix) {
+		if strings.HasPrefix(path, prefix) || strings.HasPrefix(path, prefix[1:]) {
 			return true
 		}
-		if path == prefix[:len(prefix)-1] {
+		if path == prefix[:len(prefix)-1] || path == prefix[1:len(prefix)-1] {
 			return true
 		}
 	}

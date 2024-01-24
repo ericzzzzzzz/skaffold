@@ -19,3 +19,7 @@ func NewKubernetesDownloader(artifacts []*latest.Artifact, cli *kubectl.CLI) Dow
 		CLI:       cli,
 	}
 }
+
+func NewNoopDownloader() Downloader {
+	return NoopDownloader{}
+}
