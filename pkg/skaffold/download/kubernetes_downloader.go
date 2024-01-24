@@ -7,6 +7,7 @@ import (
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/graph"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubectl"
 	kubernetesclient "github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/kubernetes/client"
+	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output/log"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/schema/latest"
 	"github.com/GoogleContainerTools/skaffold/v2/proto/filedownload"
 	"google.golang.org/grpc"
@@ -83,13 +84,12 @@ func (kd KubernetesDownloader) Start(ctx context.Context, builds []graph.Artifac
 								t := filepath.Join(entry.LocalDst, rel)
 								if v, ok := filemon.SyncedHash[t]; ok {
 									if v == recv.MD5Hash {
-										fmt.Println("File already synced.")
+										log.Entry(ctx).Infof("File %s already synced.", t)
 										continue
 									}
 								}
-								fmt.Println("Syncing remote file to local")
 								filemon.SyncedHash[t] = recv.MD5Hash
-								fmt.Println(filemon.SyncedHash)
+								log.Entry(ctx).Infof("Downloading %s from remote path %s", t, recv.Path)
 
 								file, err2 := client.DownloadFile(context.Background(), &filedownload.DownloadRequest{Path: recv.Path})
 								if err2 != nil {

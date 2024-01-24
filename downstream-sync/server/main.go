@@ -29,7 +29,6 @@ type fileServer struct {
 }
 
 func (s *fileServer) DownloadFile(req *pb.DownloadRequest, stream pb.FileService_DownloadFileServer) error {
-	fmt.Println("req.Path::" + req.Path)
 	f, err := os.Open(req.Path)
 	if err != nil {
 		fmt.Println("failed to open")
@@ -67,16 +66,6 @@ func executeApp(cmd *cobra.Command, args []string) {
 	defer watcher.Close()
 	s := fileServer{
 		watcher: watcher,
-	}
-
-	dir, err := os.Getwd()
-	if err != nil {
-		log.Fatalf("Failed to get : %v", err)
-	}
-
-	err = watchDirRecursive(s.watcher, dir)
-	if err != nil {
-		log.Fatalf("Failed to watch: %v", err)
 	}
 
 	containerCmd := exec.Command(command[0], command[1:]...)
@@ -125,9 +114,14 @@ func main() {
 }
 
 func (s *fileServer) Watch(re *pb.FileWatchRequest, stream pb.FileService_WatchServer) error {
-	fmt.Println(targets)
-	fmt.Println(command)
-	fmt.Println(excludes)
+	fmt.Println("The following folders are being watched")
+	for _, target := range targets {
+		fmt.Println(target)
+	}
+	fmt.Println("Excludes:")
+	for _, ex := range excludes {
+		fmt.Println(ex)
+	}
 
 Skip:
 	for {
