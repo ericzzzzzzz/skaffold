@@ -992,7 +992,7 @@ type HelmRelease struct {
 	Name string `yaml:"name,omitempty" yamltags:"required"`
 
 	// ChartPath is the local path to a packaged Helm chart or an unpacked Helm chart directory.
-	ChartPath string `yaml:"chartPath,omitempty" yamltags:"oneOf=chartSource" skaffold:"filepath"`
+	ChartPath string `yaml:"chartPath,omitempty" yamltags:"oneOf=chartSource" skaffold:"filepath,template"`
 
 	// RemoteChart refers to a remote Helm chart reference or URL.
 	RemoteChart string `yaml:"remoteChart,omitempty" yamltags:"oneOf=chartSource"`

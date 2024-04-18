@@ -19,11 +19,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"io"
-	"os"
-
-	"github.com/spf13/cobra"
-
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/diagnose"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/output"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/parser"
@@ -33,6 +28,12 @@ import (
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/util"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/version"
 	"github.com/GoogleContainerTools/skaffold/v2/pkg/skaffold/yaml"
+	"github.com/spf13/cobra"
+	"io"
+	"os"
+	"reflect"
+	"slices"
+	"strings"
 )
 
 var (
@@ -86,6 +87,10 @@ func doDiagnose(ctx context.Context, out io.Writer) error {
 	if err != nil {
 		return fmt.Errorf("marshalling configuration: %w", err)
 	}
+	//r := reflect.ValueOf(configs)
+	//kind := r.Kind()
+	traverse(configs)
+
 	out.Write(buf)
 
 	return nil
@@ -109,4 +114,54 @@ func printArtifactDiagnostics(ctx context.Context, out io.Writer, configs []sche
 		output.Blue.Fprintln(out, "\nConfiguration")
 	}
 	return nil
+}
+
+func traverse(in interface{}) {
+	o := reflect.ValueOf(in)
+	if o.Kind() == reflect.Ptr {
+		fmt.Println("is Pointer...")
+		o = o.Elem()
+		fmt.Println("Pointing to..." + o.Kind().String())
+	}
+
+	switch o.Kind() {
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < o.Len(); i++ {
+			if o.Index(i).CanAddr() {
+				traverse(o.Index(i).Addr().Interface())
+			}
+			traverse(o.Index(i).Interface())
+		}
+	case reflect.Struct:
+		for i := 0; i < o.NumField(); i++ {
+			next := o.Field(i)
+			// string
+			// *string
+			// []string
+			if next.Kind() == reflect.String {
+				field := o.Type().Field(i)
+				fmt.Println(field.Name)
+				if a := field.Tag.Get("skaffold"); a != "" {
+					split := strings.Split(a, ",")
+					if slices.Contains(split, "template") {
+						fmt.Println(field.Name)
+						next.SetString("charts")
+					}
+				}
+			} else if next.Kind() == reflect.Slice && next.Type().Elem().Kind() == reflect.String {
+				_ = o.Type().Field(i)
+			} else if next.CanAddr() {
+				traverse(next.Addr().Interface())
+			} else {
+				traverse(next.Interface())
+			}
+
+		}
+	case reflect.Map:
+		for _, key := range o.MapKeys() {
+			traverse(o.MapIndex(key).Addr().Interface())
+		}
+	default:
+
+	}
 }
