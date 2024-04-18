@@ -1,0 +1,44 @@
+apiVersion: skaffold/v4beta10
+kind: Config
+build:
+  artifacts:
+    - image: skaffold-helm
+      docker:
+        buildArgs:
+          "key1": "{{.CCC}}"
+    - image: skaffold-ko
+      ko:
+        dependencies:
+          paths:
+            - "**/*.go"
+            - go.*
+        fromImage: gcr.io/distroless/static-debian11:nonroot
+        env:
+          - "first={{.DDD}}"
+        labels:
+          xxx: "{{.EEE}}"
+
+manifests:
+  kustomize:
+    paths:
+      - "{{.DDD}}"
+      - "{{.CCC}}"
+  helm:
+    releases:
+      - name: "{{.DDD}}"
+        chartPath: "{{.AAA}}"
+        valuesFiles:
+          - "{{.BBB}}"
+        namespace: "{{.DDD}}"
+        setValues:
+          aaa: "{{.AAA}}"
+          bbb: "{{.BBB}}"
+        setValueTemplates:
+          image:
+            tag: "{{.AAA}}"
+deploy:
+  kubectl:
+    defaultNamespace: "{{.AAA}}"
+portForward:
+  - namespace: "{{.AAA}}"
+    resourceName: "{{.AAA}}"

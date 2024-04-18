@@ -39,6 +39,8 @@ import (
 var (
 	yamlOnly   bool
 	outputFile string
+
+	enableTemplating bool
 	// for testing
 	getRunContext = runcontext.GetRunContext
 	getCfgs       = parser.GetAllConfigs
@@ -53,6 +55,7 @@ func NewCmdDiagnose() *cobra.Command {
 		WithCommonFlags().
 		WithFlags([]*Flag{
 			{Value: &yamlOnly, Name: "yaml-only", DefValue: false, Usage: "Only prints the effective skaffold.yaml configuration"},
+			{Value: &enableTemplating, Name: "enable-templating", DefValue: false, Usage: "Render supported templated fields with golang template engine"},
 			{Value: &outputFile, Name: "output", Shorthand: "o", DefValue: "", Usage: "File to write diagnose result"},
 		}).
 		NoArgs(doDiagnose)
@@ -83,13 +86,15 @@ func doDiagnose(ctx context.Context, out io.Writer) error {
 	for i := range configs {
 		configs[i].(*latest.SkaffoldConfig).Dependencies = nil
 	}
-	traverse(configs)
+	if enableTemplating {
+		if err := applyTemplates(configs); err != nil {
+			return err
+		}
+	}
 	buf, err := yaml.MarshalWithSeparator(configs)
 	if err != nil {
 		return fmt.Errorf("marshalling configuration: %w", err)
 	}
-	//r := reflect.ValueOf(configs)
-	//kind := r.Kind()
 
 	out.Write(buf)
 
@@ -116,55 +121,116 @@ func printArtifactDiagnostics(ctx context.Context, out io.Writer, configs []sche
 	return nil
 }
 
-func traverse(in interface{}) {
+func applyTemplates(in interface{}) error {
 	if in == nil {
-		return
+		return nil
 	}
-	o := reflect.ValueOf(in)
-	//fmt.Println(o.Kind())
-	if o.Kind() == reflect.Ptr {
-		o = o.Elem()
-	}
+	o := reflect.Indirect(reflect.ValueOf(in))
 
 	switch o.Kind() {
-	case reflect.Slice, reflect.Array:
-		for i := 0; i < o.Len(); i++ {
-			if o.Index(i).CanAddr() && o.Index(i).Kind() != reflect.Interface && o.Index(i).Kind() != reflect.Ptr {
-				traverse(o.Index(i).Addr().Interface())
-			} else {
-				traverse(o.Index(i).Interface())
-			}
-		}
 	case reflect.Struct:
 		for i := 0; i < o.NumField(); i++ {
-			next := o.Field(i)
-			// string
-			// *string
-			// []string
-			if next.Kind() == reflect.String {
-				field := o.Type().Field(i)
-				if a := field.Tag.Get("skaffold"); a != "" {
-					split := strings.Split(a, ",")
-					if slices.Contains(split, "template") {
-						fmt.Println(field.Name)
-						updated, _ := util.ExpandEnvTemplate(next.String(), nil)
-						next.SetString(updated)
+			next := reflect.Indirect(o.Field(i))
+			field := o.Type().Field(i)
+			if !containTemplateTag(field) {
+				// maybe nested fields contain template tag
+				if next.Kind() == reflect.Struct || next.Kind() == reflect.Slice || next.Kind() == reflect.Map || next.Kind() == reflect.Array {
+					if err := applyTemplates(next.Addr().Interface()); err != nil {
+						return err
+					}
+				} else if next.Kind() == reflect.Interface {
+					if err := applyTemplates(next.Interface()); err != nil {
+						return err
 					}
 				}
-			} else if next.Kind() == reflect.Slice && next.Type().Elem().Kind() == reflect.String {
-				_ = o.Type().Field(i)
-			} else if next.CanAddr() && (next.Kind() == reflect.Struct || next.Kind() == reflect.Slice || next.Kind() == reflect.Map || next.Kind() == reflect.Array) {
-				traverse(next.Addr().Interface())
-			} else {
-				traverse(next.Interface())
+				continue
 			}
 
+			if next.Kind() == reflect.String {
+				updated, err := util.ExpandEnvTemplate(next.String(), nil)
+				if err != nil {
+					return err
+				}
+				next.SetString(updated)
+			} else if next.Kind() == reflect.Slice || next.Kind() == reflect.Array {
+				for i := 0; i < next.Len(); i++ {
+					nnext := reflect.Indirect(next.Index(i))
+					// string and *string
+					if nnext.Kind() == reflect.String {
+						updated, err := util.ExpandEnvTemplate(nnext.String(), nil)
+						if err != nil {
+							return err
+						}
+						nnext.SetString(updated)
+					} else {
+						return fmt.Errorf("unsupported type: %v.%v.%v template tag can only be used in the following types: string, *string, []string, []*string, map[any]string, map[any]*string",
+							o.Type(), next.Type(), nnext.Type())
+					}
+				}
+			} else if next.Kind() == reflect.Map {
+				for _, key := range next.MapKeys() {
+					nnext := next.MapIndex(key)
+					if nnext.Kind() == reflect.Ptr && nnext.Elem().Kind() == reflect.String {
+						nnext = nnext.Elem()
+						updated, err := util.ExpandEnvTemplate(nnext.String(), nil)
+						if err != nil {
+							return err
+						}
+						nnext.SetString(updated)
+					} else if nnext.Kind() == reflect.String {
+						updated, err := util.ExpandEnvTemplate(nnext.String(), nil)
+						if err != nil {
+							return err
+						}
+						next.SetMapIndex(key, reflect.ValueOf(updated))
+					} else {
+						return fmt.Errorf("unsupported type: %v.%v.%v template tag can only be used in the following types: string, *string, []string, []*string, map[any]string, map[any]*string",
+							o.Type(), next.Type(), nnext.Type())
+					}
+				}
+			} else {
+				return fmt.Errorf("unsupported type: %v.%v template tag can only be used in the following types: string, *string, []string, []*string, map[any]string, map[any]*string",
+					o.Type(), next.Type())
+			}
+
+		}
+	case reflect.Slice, reflect.Array:
+		for i := 0; i < o.Len(); i++ {
+			next := reflect.Indirect(o.Index(i))
+			if next.Kind() == reflect.Struct || next.Kind() == reflect.Slice || next.Kind() == reflect.Map || next.Kind() == reflect.Array {
+				if err := applyTemplates(next.Addr().Interface()); err != nil {
+					return err
+				}
+			} else if next.Kind() == reflect.Interface {
+				if err := applyTemplates(next.Interface()); err != nil {
+					return err
+				}
+			}
 		}
 	case reflect.Map:
 		for _, key := range o.MapKeys() {
-			traverse(o.MapIndex(key).Addr().Interface())
+			next := reflect.Indirect(o.MapIndex(key))
+			if next.Kind() == reflect.Struct || next.Kind() == reflect.Slice || next.Kind() == reflect.Map || next.Kind() == reflect.Array {
+				if err := applyTemplates(next.Addr().Interface()); err != nil {
+					return err
+				}
+			} else if next.Kind() == reflect.Interface {
+				if err := applyTemplates(next.Interface()); err != nil {
+					return err
+				}
+			}
 		}
 	default:
 
 	}
+	return nil
+}
+
+func containTemplateTag(sf reflect.StructField) bool {
+	v, ok := sf.Tag.Lookup("skaffold")
+	if !ok {
+		return ok
+	}
+	split := strings.Split(v, ",")
+	return slices.Contains(split, "template")
 }
