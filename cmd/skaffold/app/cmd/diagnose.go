@@ -83,13 +83,13 @@ func doDiagnose(ctx context.Context, out io.Writer) error {
 	for i := range configs {
 		configs[i].(*latest.SkaffoldConfig).Dependencies = nil
 	}
+	traverse(configs)
 	buf, err := yaml.MarshalWithSeparator(configs)
 	if err != nil {
 		return fmt.Errorf("marshalling configuration: %w", err)
 	}
 	//r := reflect.ValueOf(configs)
 	//kind := r.Kind()
-	traverse(configs)
 
 	out.Write(buf)
 
@@ -117,20 +117,23 @@ func printArtifactDiagnostics(ctx context.Context, out io.Writer, configs []sche
 }
 
 func traverse(in interface{}) {
+	if in == nil {
+		return
+	}
 	o := reflect.ValueOf(in)
+	//fmt.Println(o.Kind())
 	if o.Kind() == reflect.Ptr {
-		fmt.Println("is Pointer...")
 		o = o.Elem()
-		fmt.Println("Pointing to..." + o.Kind().String())
 	}
 
 	switch o.Kind() {
 	case reflect.Slice, reflect.Array:
 		for i := 0; i < o.Len(); i++ {
-			if o.Index(i).CanAddr() {
+			if o.Index(i).CanAddr() && o.Index(i).Kind() != reflect.Interface && o.Index(i).Kind() != reflect.Ptr {
 				traverse(o.Index(i).Addr().Interface())
+			} else {
+				traverse(o.Index(i).Interface())
 			}
-			traverse(o.Index(i).Interface())
 		}
 	case reflect.Struct:
 		for i := 0; i < o.NumField(); i++ {
@@ -140,17 +143,17 @@ func traverse(in interface{}) {
 			// []string
 			if next.Kind() == reflect.String {
 				field := o.Type().Field(i)
-				fmt.Println(field.Name)
 				if a := field.Tag.Get("skaffold"); a != "" {
 					split := strings.Split(a, ",")
 					if slices.Contains(split, "template") {
 						fmt.Println(field.Name)
-						next.SetString("charts")
+						updated, _ := util.ExpandEnvTemplate(next.String(), nil)
+						next.SetString(updated)
 					}
 				}
 			} else if next.Kind() == reflect.Slice && next.Type().Elem().Kind() == reflect.String {
 				_ = o.Type().Field(i)
-			} else if next.CanAddr() {
+			} else if next.CanAddr() && (next.Kind() == reflect.Struct || next.Kind() == reflect.Slice || next.Kind() == reflect.Map || next.Kind() == reflect.Array) {
 				traverse(next.Addr().Interface())
 			} else {
 				traverse(next.Interface())

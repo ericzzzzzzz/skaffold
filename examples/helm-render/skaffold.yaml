@@ -7,4 +7,4 @@ manifests:
   helm:
     releases:
     - name: skaffold-helm
-      chartPath: "sss"
+      chartPath: "{{.AAA}}"
