@@ -1,0 +1,32 @@
+apiVersion: skaffold/v4beta11
+kind: Config
+build:
+  artifacts:
+    - image: test-image
+      context: /Users/ericwork/work_repos/skaffold/integration/testdata/diagnose/not-all-envs-set
+      docker:
+        dockerfile: Dockerfile
+  tagPolicy:
+    gitCommit: {}
+  local:
+    concurrency: 1
+manifests:
+  helm:
+    releases:
+      - name: test-release
+        chartPath: /Users/ericwork/work_repos/skaffold/integration/testdata/diagnose/not-all-envs-set/charts
+        version: 1.21.2
+        setValueTemplates:
+          image.repository: '{{.IMAGE_REPO_test_image}}'
+          image.tag: '{{.IMAGE_TAG_test_image}}@{{.IMAGE_DIGEST_test_image}}'
+deploy:
+  helm:
+    releases:
+      - name: test-release
+        chartPath: /Users/ericwork/work_repos/skaffold/integration/testdata/diagnose/not-all-envs-set/charts
+        version: 1.21.2
+        setValueTemplates:
+          image.repository: '{{.IMAGE_REPO_test_image}}'
+          image.tag: '{{.IMAGE_TAG_test_image}}@{{.IMAGE_DIGEST_test_image}}'
+  logs:
+    prefix: container

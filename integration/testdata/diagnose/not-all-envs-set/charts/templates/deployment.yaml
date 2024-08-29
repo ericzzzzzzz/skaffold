@@ -16,4 +16,4 @@ spec:
     spec:
       containers:
       - name: {{ .Chart.Name }}
-        image: {{ .Values.image.tag }}
+        image: {{.Values.image.repository}}:{{.Values.image.tag}}

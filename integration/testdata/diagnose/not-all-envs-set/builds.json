@@ -1,0 +1,8 @@
+{
+  "builds": [
+    {
+      "imageName": "test-image",
+      "tag": "test-image:476b3f8084372d60c46281326234d44f692ccbe8d6d0a22fd5fd29ff05ccbe1e"
+    }
+  ]
+}
