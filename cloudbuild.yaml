@@ -1,0 +1,5 @@
+steps:
+  # Run a simple shell command
+  - name: 'ubuntu'
+    args: ['echo', 'Hello, Cloud Build! The time is $(date)']
+
